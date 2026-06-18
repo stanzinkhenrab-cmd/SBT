@@ -24,7 +24,6 @@ Map.addLayer(roi, {color: 'FFFFFF'}, 'Study Area Boundary', true, 0.3);
 // SECTION 2: LULC CLASS SCHEMA
 // ============================================================
 
-// Class codes 1–6 as required for the final product
 var classProperty = 'ClassID';
 var classNames   = ['Seabuckthorn', 'Agricultural Land', 'Natural Vegetation',
                     'Water Bodies', 'Barren Land', 'Snow/Ice'];
@@ -36,14 +35,10 @@ var classPalette = ['#006400', '#90EE90', '#808000', '#1E90FF', '#8B4513', '#FFF
 var numClasses   = 6;
 
 // ============================================================
-// SECTION 3: GROUND TRUTH / TRAINING DATA (578 field GPS points + Snow/Ice)
+// SECTION 3: GROUND TRUTH / TRAINING DATA
 // ============================================================
 
-// All 578 ground truth points from SBTGTDATA.csv embedded inline.
-// Snow/Ice points derived from high-elevation persistent snow/ice areas
-// within the ROI visible in satellite imagery during the growing season.
-
-// --- Helper: create point features for a class ---
+// Helper: create point features for a class
 function makePoints(coords, classId) {
   return coords.map(function(c) {
     return ee.Feature(ee.Geometry.Point([c[0], c[1]]), {ClassID: classId});
@@ -257,76 +252,54 @@ var barrenCoords = [
   [77.549417,34.108389],[77.510722,34.1235],[77.734056,33.912389],[77.734278,33.903194]
 ];
 
-// === SNOW/ICE — ClassID 6 ===
-// Persistent snow/ice at high-elevation ridge crests and glaciated areas
-// within the ROI during the growing season (June–September).
-// These points are placed on known permanent snowfields/glaciers
-// visible in Sentinel-2 imagery at elevations above 5000 m.
-var snowCoords = [
-  [77.42, 34.17],[77.43, 34.175],[77.425, 34.168],[77.44, 34.172],
-  [77.435, 34.165],[77.41, 34.178],[77.445, 34.17],[77.415, 34.173],
-  [77.45, 34.165],[77.455, 34.162],[77.46, 34.16],[77.465, 34.158],
-  [77.47, 34.155],[77.475, 34.152],[77.42, 34.165],[77.43, 34.162],
-  [77.44, 34.16],[77.45, 34.158],[77.48, 34.15],[77.485, 34.148],
-  [77.49, 34.145],[77.495, 34.142],[77.50, 34.14],[77.505, 34.138],
-  [77.51, 34.135],[77.79, 33.88],[77.795, 33.875],[77.80, 33.87],
-  [77.805, 33.875],[77.81, 33.872]
-];
-
-// Build FeatureCollections per class
+// Build FeatureCollections per class (5 field-collected classes)
 var sbtPoints    = ee.FeatureCollection(makePoints(sbtCoords, 1));
 var agPoints     = ee.FeatureCollection(makePoints(agCoords, 2));
 var vegPoints    = ee.FeatureCollection(makePoints(vegCoords, 3));
 var waterPoints  = ee.FeatureCollection(makePoints(waterCoords, 4));
 var barrenPoints = ee.FeatureCollection(makePoints(barrenCoords, 5));
-var snowPoints   = ee.FeatureCollection(makePoints(snowCoords, 6));
 
-// Merge all classes into a single FeatureCollection
-var groundTruth = sbtPoints
+// Merge the 5 field-collected classes
+var groundTruthField = sbtPoints
   .merge(agPoints)
   .merge(vegPoints)
   .merge(waterPoints)
-  .merge(barrenPoints)
-  .merge(snowPoints);
+  .merge(barrenPoints);
 
-// Print sample distribution per class
 print('========== TRAINING DATA SUMMARY ==========');
-print('Total ground truth points:', groundTruth.size());
-classCodes.forEach(function(code, i) {
-  print(classNames[i] + ' (ClassID=' + code + '):',
-        groundTruth.filter(ee.Filter.eq(classProperty, code)).size());
-});
+print('Field-collected ground truth points:', groundTruthField.size());
 
-Map.addLayer(groundTruth, {color: 'FF00FF'}, 'Ground Truth Points');
+Map.addLayer(groundTruthField, {color: 'FF00FF'}, 'Ground Truth Points');
 
 // ============================================================
 // SECTION 4: SENTINEL-2 CLOUD-FREE COMPOSITE (JUNE–SEPTEMBER)
 // ============================================================
 
-// Cloud masking using QA60 bitmask band.
-// Bit 10 = opaque cloud, Bit 11 = cirrus cloud.
-function maskS2CloudsQA60(image) {
-  var qa = image.select('QA60');
-  var cloudBitMask  = 1 << 10;
-  var cirrusBitMask = 1 << 11;
-  var mask = qa.bitwiseAnd(cloudBitMask).eq(0)
-    .and(qa.bitwiseAnd(cirrusBitMask).eq(0));
-  return image.updateMask(mask)
-    .divide(10000)  // Scale reflectance to 0–1
+// Cloud masking using Scene Classification Layer (SCL).
+// SCL is more reliable than QA60 in cold-arid mountainous terrain
+// because QA60 aggressively flags bright barren surfaces and snow as cloud.
+function maskS2Clouds(image) {
+  var scl = image.select('SCL');
+  var clearMask = scl.eq(4)   // Vegetation
+    .or(scl.eq(5))            // Bare soil
+    .or(scl.eq(6))            // Water
+    .or(scl.eq(7))            // Unclassified — critical for arid Ladakh terrain
+    .or(scl.eq(11));          // Snow/Ice at high elevations
+  return image.updateMask(clearMask)
     .copyProperties(image, ['system:time_start']);
 }
 
-// Filter Sentinel-2 SR for the growing season
 var s2 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
   .filterBounds(roi)
-  .filter(ee.Filter.calendarRange(6, 9, 'month'))  // June–September
-  .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
-  .map(maskS2CloudsQA60);
+  .filter(ee.Filter.calendarRange(6, 9, 'month'))  // June–September growing season
+  .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 30))
+  .map(maskS2Clouds);
 
 print('========== SENTINEL-2 IMAGERY ==========');
 print('Sentinel-2 scenes used:', s2.size());
 
-// Select the required spectral bands: B2, B3, B4, B5, B8, B11, B12
+// Spectral bands: B2 (Blue), B3 (Green), B4 (Red), B5 (Red Edge),
+// B8 (NIR), B11 (SWIR1), B12 (SWIR2)
 var bands = ['B2', 'B3', 'B4', 'B5', 'B8', 'B11', 'B12'];
 var composite = s2.select(bands).median().clip(roi);
 
@@ -352,32 +325,63 @@ var savi = composite.expression(
 var ndbi = composite.normalizedDifference(['B11', 'B8']).rename('NDBI');
 
 // ============================================================
-// SECTION 6: TOPOGRAPHIC VARIABLES (Copernicus DEM 30m)
+// SECTION 6: TOPOGRAPHIC VARIABLES (SRTM DEM 30m)
 // ============================================================
 
-// Copernicus GLO-30 DEM for high-accuracy mountainous terrain
-var dem = ee.ImageCollection('COPERNICUS/DEM/GLO30')
-  .filterBounds(roi)
-  .select('DEM')
-  .mosaic()
-  .clip(roi)
-  .rename('Elevation');
-
-var terrain = ee.Terrain.products(dem.rename('DEM'));
-var slope   = terrain.select('slope').rename('Slope');
-var aspect  = terrain.select('aspect').rename('Aspect');
+// SRTM V3 provides reliable, gap-free global coverage as a single Image
+var srtm = ee.Image('USGS/SRTMGL1_003');
+var elevation = srtm.select('elevation').clip(roi).rename('Elevation');
+var slope     = ee.Terrain.slope(elevation).rename('Slope');
+var aspect    = ee.Terrain.aspect(elevation).rename('Aspect');
 
 // ============================================================
-// SECTION 7: MULTI-BAND PREDICTOR STACK
+// SECTION 7: SNOW/ICE TRAINING DATA FROM DEM + NDSI
 // ============================================================
 
-// Combine spectral bands + vegetation indices + terrain layers
+// Derive Snow/Ice training points automatically from pixels that are:
+//   1) Above 5000m elevation (persistent snow/glaciers in Ladakh)
+//   2) High NDSI (Normalized Difference Snow Index > 0.4)
+// This is far more reliable than hardcoded coordinates which may fall on masked pixels.
+
+var ndsi = composite.normalizedDifference(['B3', 'B11']).rename('NDSI');
+
+var snowMask = elevation.gt(5000).and(ndsi.gt(0.4));
+var snowImage = snowMask.updateMask(snowMask);
+
+// Sample 30 random points from verified snow/ice pixels
+var snowPoints = snowImage.stratifiedSample({
+  numPoints: 30,
+  classBand: 'Elevation',
+  region: roi,
+  scale: 30,
+  seed: 42,
+  geometries: true
+}).map(function(f) {
+  return f.set(classProperty, 6);
+});
+
+print('Snow/Ice training points derived:', snowPoints.size());
+
+// Merge all 6 classes
+var groundTruth = groundTruthField.merge(snowPoints);
+print('Total ground truth points (all classes):', groundTruth.size());
+
+// Print per-class counts
+classCodes.forEach(function(code, i) {
+  print(classNames[i] + ' (ClassID=' + code + '):',
+        groundTruth.filter(ee.Filter.eq(classProperty, code)).size());
+});
+
+// ============================================================
+// SECTION 8: MULTI-BAND PREDICTOR STACK
+// ============================================================
+
 var inputImage = composite
   .addBands(ndvi)
   .addBands(ndwi)
   .addBands(savi)
   .addBands(ndbi)
-  .addBands(dem)
+  .addBands(elevation)
   .addBands(slope)
   .addBands(aspect);
 
@@ -387,10 +391,9 @@ print('Input bands:', inputBands);
 print('Total band count:', inputBands.length());
 
 // ============================================================
-// SECTION 8: SAMPLE EXTRACTION AND 70/30 TRAIN-VALIDATION SPLIT
+// SECTION 9: SAMPLE EXTRACTION AND 70/30 TRAIN-VALIDATION SPLIT
 // ============================================================
 
-// Extract predictor values at each ground truth point
 var samples = inputImage.sampleRegions({
   collection: groundTruth,
   properties: [classProperty],
@@ -399,7 +402,11 @@ var samples = inputImage.sampleRegions({
   geometries: true
 });
 
-print('Total samples extracted:', samples.size());
+// Filter out any samples that landed on masked pixels (null band values)
+var firstBand = ee.String(inputBands.get(0));
+samples = samples.filter(ee.Filter.notNull([firstBand]));
+
+print('Valid samples extracted:', samples.size());
 
 // Reproducible 70/30 split with seed = 42
 var samplesWithRandom = samples.randomColumn('random', 42);
@@ -410,7 +417,7 @@ print('Training samples (70%):', trainingSamples.size());
 print('Validation samples (30%):', validationSamples.size());
 
 // ============================================================
-// SECTION 9: RANDOM FOREST CLASSIFIER (200 trees, seed=42)
+// SECTION 10: RANDOM FOREST CLASSIFIER (200 trees, seed=42)
 // ============================================================
 
 var classifier = ee.Classifier.smileRandomForest({
@@ -423,16 +430,15 @@ var classifier = ee.Classifier.smileRandomForest({
 });
 
 // ============================================================
-// SECTION 10: VARIABLE IMPORTANCE
+// SECTION 11: VARIABLE IMPORTANCE
 // ============================================================
 
 var importance = ee.Dictionary(classifier.explain().get('importance'));
 print('========== VARIABLE IMPORTANCE ==========');
 print('Feature importance:', importance);
 
-// Chart: variable importance as a bar chart
+// Build importance as FeatureCollection for export and charting
 var importanceKeys = importance.keys();
-var importanceVals = importance.values();
 
 var importanceFeatures = importanceKeys.map(function(key) {
   return ee.Feature(null, {
@@ -455,13 +461,13 @@ var importanceChart = ui.Chart.feature.byFeature(importanceFC, 'Variable', 'Impo
 print(importanceChart);
 
 // ============================================================
-// SECTION 11: CLASSIFY THE STUDY AREA
+// SECTION 12: CLASSIFY THE STUDY AREA
 // ============================================================
 
 var classified = inputImage.classify(classifier).clip(roi);
 
 // ============================================================
-// SECTION 12: ACCURACY ASSESSMENT
+// SECTION 13: ACCURACY ASSESSMENT
 // ============================================================
 
 var validated = validationSamples.classify(classifier);
@@ -477,17 +483,19 @@ print('Users Accuracy (per class):', confusionMatrix.consumersAccuracy());
 // Build exportable accuracy table
 var overallAccuracy = confusionMatrix.accuracy();
 var kappa = confusionMatrix.kappa();
-var producersAcc = confusionMatrix.producersAccuracy();
-var usersAcc = confusionMatrix.consumersAccuracy();
+var producersAcc = ee.List(confusionMatrix.producersAccuracy().toList());
+var usersAcc     = ee.List(confusionMatrix.consumersAccuracy().toList());
 
-var accuracyFeatures = classCodes.map(function(code, i) {
-  return ee.Feature(null, {
+// Use order() to get indices that match actual class codes in the matrix
+var accuracyFeatures = [];
+for (var i = 0; i < numClasses; i++) {
+  accuracyFeatures.push(ee.Feature(null, {
     'Class': classNames[i],
-    'ClassID': code,
-    'Producers_Accuracy': ee.List(producersAcc.toList().get(i)).get(0),
-    'Users_Accuracy': ee.List(usersAcc.toList().get(i)).get(0)
-  });
-});
+    'ClassID': classCodes[i],
+    'Producers_Accuracy': ee.List(producersAcc.get(i)).get(0),
+    'Users_Accuracy': ee.List(usersAcc.get(i)).get(0)
+  }));
+}
 
 var summaryRow = ee.Feature(null, {
   'Class': 'OVERALL',
@@ -500,12 +508,14 @@ var accuracyExport = ee.FeatureCollection(accuracyFeatures)
   .merge(ee.FeatureCollection([summaryRow]));
 
 // ============================================================
-// SECTION 13: CLASS AREA CALCULATION (Hectares)
+// SECTION 14: CLASS AREA CALCULATION (Hectares)
 // ============================================================
 
 var pixelArea = ee.Image.pixelArea().divide(10000); // m² to hectares
 
-var areaByClass = classCodes.map(function(code, i) {
+var areaFeatures = [];
+for (var j = 0; j < numClasses; j++) {
+  var code = classCodes[j];
   var classMask = classified.eq(ee.Number(code));
   var classArea = pixelArea.updateMask(classMask).reduceRegion({
     reducer: ee.Reducer.sum(),
@@ -515,32 +525,26 @@ var areaByClass = classCodes.map(function(code, i) {
     tileScale: 4
   });
   var areaHa = ee.Number(classArea.get('area'));
-  return ee.Feature(null, {
-    'Class': classNames[i],
+  areaFeatures.push(ee.Feature(null, {
+    'Class': classNames[j],
     'ClassID': code,
     'Area_Hectares': areaHa,
     'Area_SqKm': areaHa.divide(100)
-  });
-});
+  }));
+}
 
-var areaTable = ee.FeatureCollection(areaByClass);
+var areaTable = ee.FeatureCollection(areaFeatures);
 
 print('========== CLASS AREA STATISTICS ==========');
 print('Area by LULC class:', areaTable);
 
-classCodes.forEach(function(code, i) {
-  var feat = ee.Feature(areaTable.filter(ee.Filter.eq('ClassID', code)).first());
-  print(classNames[i] + ':', feat.get('Area_Hectares'), 'ha |',
-        feat.get('Area_SqKm'), 'sq km');
-});
-
 // ============================================================
-// SECTION 14: VISUALIZATION
+// SECTION 15: VISUALIZATION
 // ============================================================
 
 // Sentinel-2 False Color Composite (B8, B4, B3 = NIR-R-G)
 Map.addLayer(composite, {
-  bands: ['B8', 'B4', 'B3'], min: 0, max: 0.4
+  bands: ['B8', 'B4', 'B3'], min: 200, max: 4000
 }, 'False Color Composite (NIR-R-G)');
 
 // NDVI
@@ -550,7 +554,7 @@ Map.addLayer(ndvi, {
 }, 'NDVI', false);
 
 // DEM
-Map.addLayer(dem, {
+Map.addLayer(elevation, {
   min: 3000, max: 5800,
   palette: ['#228B22', '#90EE90', '#FFFF00', '#D2B48C', '#8B4513', '#FFFFFF']
 }, 'Elevation (DEM)', false);
@@ -574,7 +578,7 @@ Map.addLayer(classified, {
 }, 'LULC Classification');
 
 // ============================================================
-// SECTION 15: MAP LEGEND
+// SECTION 16: MAP LEGEND
 // ============================================================
 
 var legend = ui.Panel({
@@ -608,10 +612,10 @@ classNames.forEach(function(name, index) {
 Map.add(legend);
 
 // ============================================================
-// SECTION 16: EXPORTS TO GOOGLE DRIVE
+// SECTION 17: EXPORTS TO GOOGLE DRIVE
 // ============================================================
 
-// 16a. Classified LULC raster (GeoTIFF, 10m resolution)
+// 17a. Classified LULC raster (GeoTIFF, 10m resolution)
 Export.image.toDrive({
   image: classified.toByte(),
   description: 'LULC_Seabuckthorn_Ladakh_Classified',
@@ -623,7 +627,7 @@ Export.image.toDrive({
   fileFormat: 'GeoTIFF'
 });
 
-// 16b. Accuracy assessment table (CSV)
+// 17b. Accuracy assessment table (CSV)
 Export.table.toDrive({
   collection: accuracyExport,
   description: 'Accuracy_Assessment_Table',
@@ -632,7 +636,7 @@ Export.table.toDrive({
   selectors: ['Class', 'ClassID', 'Producers_Accuracy', 'Users_Accuracy']
 });
 
-// 16c. Class area statistics (CSV)
+// 17c. Class area statistics (CSV)
 Export.table.toDrive({
   collection: areaTable,
   description: 'Class_Area_Statistics',
@@ -641,7 +645,7 @@ Export.table.toDrive({
   selectors: ['Class', 'ClassID', 'Area_Hectares', 'Area_SqKm']
 });
 
-// 16d. Variable importance table (CSV)
+// 17d. Variable importance table (CSV)
 Export.table.toDrive({
   collection: importanceFC,
   description: 'Variable_Importance_Table',
