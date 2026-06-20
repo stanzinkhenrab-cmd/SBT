@@ -795,8 +795,8 @@ var samples = inputImage.sampleRegions({
   tileScale: 8
 });
 
-// Remove any null samples (points that fell on masked pixels)
-samples = samples.filter(ee.Filter.notNull(inputImage.bandNames().getInfo()));
+// Remove samples that fell on masked pixels (use band name directly, not getInfo)
+samples = samples.filter(ee.Filter.notNull(['B2', 'B3', 'B4', 'B8', 'NDVI', 'Elevation']));
 
 print('Total samples extracted:', samples.size());
 
@@ -805,11 +805,12 @@ var trainingSamples = samplesWithRandom.filter(ee.Filter.lt('random', 0.7));
 var validationSamples = samplesWithRandom.filter(ee.Filter.gte('random', 0.7));
 
 // Balance training samples — cap each class to prevent majority class dominance
-// Use the smallest class count as the target (or set a max)
-var minClassCount = 50; // approximate minimum (Seabuckthorn/Water are smallest)
-var balancedTraining = ee.FeatureCollection([0, 1, 2, 3, 4].map(function(c) {
-  return trainingSamples.filter(ee.Filter.eq(classProperty, c)).limit(minClassCount);
-})).flatten();
+var minClassCount = 50;
+var balancedTraining = ee.FeatureCollection(
+  ee.List([0, 1, 2, 3, 4]).map(function(c) {
+    return trainingSamples.filter(ee.Filter.eq(classProperty, c)).limit(minClassCount);
+  })
+).flatten();
 
 print('Balanced training samples:', balancedTraining.size());
 
