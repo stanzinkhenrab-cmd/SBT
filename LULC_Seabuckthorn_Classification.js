@@ -4,158 +4,160 @@
 //          under the Cold Desert Region of Ladakh
 // Method:  Random Forest (100 trees) | Sentinel-2 SR
 // Season:  Growing Season (June–September)
-// Classes: Water Bodies, Vegetation, Barren Land,
-//          Seabuckthorn, Agricultural Field
+// Classes: Water Bodies (0), Vegetation (1), Barren Land (2),
+//          Seabuckthorn (3)
+// Note:    Agricultural Field merged into Vegetation class
+// ============================================================
+// FIXES FOR LADAKH TOPOGRAPHY:
+//   1. 20m buffer polygons around GPS points for better sampling
+//   2. MNDWI replaces NDWI for water (avoids snow/ice confusion)
+//   3. Red Edge bands (B5, B6, B7) separate SBT from agriculture
+//   4. Elevation mask: SBT only 2800–4000m, Water below 4500m
+//   5. Slope filter: SBT only on gentle slopes (<25 degrees)
+//   6. Class-balanced sampling prevents minority over-prediction
+//   7. NDVI gate on Seabuckthorn (must be green vegetation)
+//   8. BSI for better barren land separation in arid terrain
 // ============================================================
 
 // ============================================================
 // SECTION 1: STUDY AREA (ROI) DEFINITION
 // ============================================================
 
-// ROI: 77.3878601E, 34.1829314N to 77.8217575E, 33.8666392N
 var roi = ee.Geometry.Rectangle([
-  77.3878601, 33.8666392,   // SW corner (xMin, yMin)
-  77.8217575, 34.1829314    // NE corner (xMax, yMax)
+  77.3878601, 33.8666392,
+  77.8217575, 34.1829314
 ]);
 
 Map.centerObject(roi, 11);
 Map.addLayer(roi, {color: 'FFFFFF'}, 'Study Area Boundary');
 
 // ============================================================
-// SECTION 2: LULC CLASS SCHEMA
+// SECTION 2: LULC CLASS SCHEMA (4 CLASSES)
 // ============================================================
 
-// 5 LULC classes mapped to integer codes
-// 0 = Water Bodies | 1 = Vegetation | 2 = Barren Land
-// 3 = Seabuckthorn | 4 = Agricultural Field
+// Agricultural Field is merged into Vegetation for Ladakh context
+// 0 = Water Bodies | 1 = Vegetation | 2 = Barren Land | 3 = Seabuckthorn
 var classProperty = 'class_int';
-var classNames  = ['Water Bodies', 'Vegetation', 'Barren Land', 'Seabuckthorn', 'Agricultural Field'];
-var classPalette = ['#1E90FF', '#228B22', '#D2B48C', '#FF0000', '#FFD700'];
-var numClasses  = 5;
+var classNames  = ['Water Bodies', 'Vegetation', 'Barren Land', 'Seabuckthorn'];
+var classPalette = ['#1E90FF', '#228B22', '#D2B48C', '#FF0000'];
+var numClasses  = 4;
 
 // ============================================================
-// SECTION 3: GROUND TRUTH / TRAINING DATA
+// SECTION 3: GROUND TRUTH / TRAINING DATA (578 GPS POINTS)
 // ============================================================
-
-// ---- OPTION A: Load from uploaded GEE Table Asset ----
-// Upload SBTGTDATA.csv as a GEE Table Asset, then uncomment:
-// var groundTruthRaw = ee.FeatureCollection('users/YOUR_USERNAME/SBTGTDATA');
-
-// ---- OPTION B: Inline training points from field GPS data ----
-// All 578 ground truth points from SBTGTDATA.csv
 
 var groundTruthRaw = ee.FeatureCollection([
-  // === AGRICULTURAL FIELD (108 points) ===
-  ee.Feature(ee.Geometry.Point([77.51093228, 34.13228877]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.5118587, 34.13145185]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.50709571, 34.13273368]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.51926898, 34.12702267]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.51971461, 34.12465076]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.52257235, 34.12340406]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.52717165, 34.12239143]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.53036111, 34.12263457]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.52888996, 34.1234992]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.53765217, 34.12065014]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.53733636, 34.12260965]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.53520481, 34.11598949]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.53287101, 34.11590263]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.55468291, 34.1080184]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.55576971, 34.10681768]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.55867823, 34.10723179]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.57722168, 34.11298532]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.57452049, 34.11301897]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.5749919, 34.11590113]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.61975609, 34.08107964]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.62050459, 34.08286453]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.62247661, 34.07913857]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.62599403, 34.08128433]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.62816444, 34.08174883]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.62756882, 34.07858694]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.62660143, 34.07501202]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.62743897, 34.07323035]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.63013122, 34.07366438]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.63993103, 34.07064045]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.6408205, 34.0717383]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.64222152, 34.06843091]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.63923788, 34.06851446]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.64653345, 34.06640821]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.64901517, 34.0664941]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.64611283, 34.06337729]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.64260936, 34.06233242]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.64886778, 34.06116717]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.65316746, 34.0637501]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.65476175, 34.06058117]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.6534739, 34.05878262]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.65947606, 34.05931747]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.65946944, 34.05560045]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.66081342, 34.05843036]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.65566848, 34.05809604]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.6626922, 34.05412166]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.66480171, 34.05124508]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.66577568, 34.04911109]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.66765729, 34.04756774]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.66679473, 34.04544345]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.66965842, 34.04519962]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.67055405, 34.04218915]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.67503737, 34.0415863]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.67007032, 34.03847861]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.67472647, 34.03887264]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.67119355, 34.03550066]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.67717135, 34.03323407]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.67361835, 34.03035113]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.68114058, 34.03645797]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.68300254, 34.03613237]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.68099237, 34.03441507]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.68135509, 34.02828154]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.68251611, 34.02655467]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.68165793, 34.02218804]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.68005074, 34.01883205]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.6773237, 34.02526119]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.6846664, 34.01308712]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.67930022, 34.01127943]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.67755011, 34.00883798]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.6799276, 34.00727028]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.68194442, 34.00089141]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.67719654, 34.00291248]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.67982434, 33.99858895]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.68421153, 33.99333601]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.69101912, 33.99289822]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.6900993, 33.98793805]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.7262121, 33.93475206]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.72563705, 33.93404168]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.72757796, 33.93114242]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.72388562, 33.93144814]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.73231575, 33.92288908]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.73884913, 33.91429384]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.73574525, 33.91413812]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.73739183, 33.91453059]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.73974417, 33.91353284]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.74061847, 33.91200535]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.73702317, 33.90879335]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.73665344, 33.90431228]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.73955808, 33.90489974]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.74202417, 33.90625818]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.73977752, 33.90190482]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.67229808, 34.02231578]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.67032394, 34.02408327]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.66902909, 34.02355351]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.66765375, 34.02664405]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.6691451, 34.02559565]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.66522836, 34.02834875]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.66027431, 34.03057709]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.6615032, 34.03416146]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.6589799, 34.0366856]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.65656396, 34.02990831]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.65364143, 34.03230427]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.65153883, 34.03562927]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.64361136, 34.03973762]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.63830057, 34.04222933]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.64365633, 34.04572289]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.63991163, 34.04782264]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.63513142, 34.04807607]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.63476978, 34.05276702]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.465528, 34.130194]), {class_str: 'Agricultural Field'}),
-  ee.Feature(ee.Geometry.Point([77.736361, 33.908333]), {class_str: 'Agricultural Field'}),
+  // === AGRICULTURAL FIELD → mapped to Vegetation (class 1) ===
+  ee.Feature(ee.Geometry.Point([77.51093228, 34.13228877]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.5118587, 34.13145185]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.50709571, 34.13273368]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.51926898, 34.12702267]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.51971461, 34.12465076]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.52257235, 34.12340406]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.52717165, 34.12239143]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.53036111, 34.12263457]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.52888996, 34.1234992]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.53765217, 34.12065014]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.53733636, 34.12260965]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.53520481, 34.11598949]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.53287101, 34.11590263]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.55468291, 34.1080184]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.55576971, 34.10681768]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.55867823, 34.10723179]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.57722168, 34.11298532]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.57452049, 34.11301897]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.5749919, 34.11590113]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.61975609, 34.08107964]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.62050459, 34.08286453]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.62247661, 34.07913857]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.62599403, 34.08128433]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.62816444, 34.08174883]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.62756882, 34.07858694]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.62660143, 34.07501202]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.62743897, 34.07323035]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.63013122, 34.07366438]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.63993103, 34.07064045]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.6408205, 34.0717383]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.64222152, 34.06843091]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.63923788, 34.06851446]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.64653345, 34.06640821]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.64901517, 34.0664941]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.64611283, 34.06337729]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.64260936, 34.06233242]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.64886778, 34.06116717]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.65316746, 34.0637501]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.65476175, 34.06058117]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.6534739, 34.05878262]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.65947606, 34.05931747]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.65946944, 34.05560045]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.66081342, 34.05843036]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.65566848, 34.05809604]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.6626922, 34.05412166]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.66480171, 34.05124508]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.66577568, 34.04911109]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.66765729, 34.04756774]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.66679473, 34.04544345]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.66965842, 34.04519962]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.67055405, 34.04218915]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.67503737, 34.0415863]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.67007032, 34.03847861]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.67472647, 34.03887264]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.67119355, 34.03550066]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.67717135, 34.03323407]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.67361835, 34.03035113]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.68114058, 34.03645797]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.68300254, 34.03613237]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.68099237, 34.03441507]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.68135509, 34.02828154]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.68251611, 34.02655467]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.68165793, 34.02218804]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.68005074, 34.01883205]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.6773237, 34.02526119]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.6846664, 34.01308712]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.67930022, 34.01127943]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.67755011, 34.00883798]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.6799276, 34.00727028]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.68194442, 34.00089141]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.67719654, 34.00291248]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.67982434, 33.99858895]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.68421153, 33.99333601]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.69101912, 33.99289822]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.6900993, 33.98793805]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.7262121, 33.93475206]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.72563705, 33.93404168]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.72757796, 33.93114242]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.72388562, 33.93144814]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.73231575, 33.92288908]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.73884913, 33.91429384]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.73574525, 33.91413812]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.73739183, 33.91453059]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.73974417, 33.91353284]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.74061847, 33.91200535]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.73702317, 33.90879335]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.73665344, 33.90431228]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.73955808, 33.90489974]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.74202417, 33.90625818]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.73977752, 33.90190482]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.67229808, 34.02231578]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.67032394, 34.02408327]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.66902909, 34.02355351]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.66765375, 34.02664405]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.6691451, 34.02559565]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.66522836, 34.02834875]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.66027431, 34.03057709]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.6615032, 34.03416146]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.6589799, 34.0366856]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.65656396, 34.02990831]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.65364143, 34.03230427]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.65153883, 34.03562927]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.64361136, 34.03973762]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.63830057, 34.04222933]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.64365633, 34.04572289]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.63991163, 34.04782264]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.63513142, 34.04807607]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.63476978, 34.05276702]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.465528, 34.130194]), {class_str: 'Vegetation'}),
+  ee.Feature(ee.Geometry.Point([77.736361, 33.908333]), {class_str: 'Vegetation'}),
 
   // === BARREN LAND (163 points) ===
   ee.Feature(ee.Geometry.Point([77.50492833, 34.12815165]), {class_str: 'Barren Land'}),
@@ -634,13 +636,16 @@ var groundTruthRaw = ee.FeatureCollection([
   ee.Feature(ee.Geometry.Point([77.733333, 33.903056]), {class_str: 'Seabuckthorn'})
 ]);
 
-// Remap string class names to integer codes
+// ============================================================
+// SECTION 3b: CLASS ENCODING AND 20m BUFFER POLYGONS
+// ============================================================
+
+// Remap string class names to integer codes (4 classes)
 var classLookup = ee.Dictionary({
   'Water Bodies': 0,
   'Vegetation': 1,
   'Barren Land': 2,
-  'Seabuckthorn': 3,
-  'Agricultural Field': 4
+  'Seabuckthorn': 3
 });
 
 var groundTruth = groundTruthRaw.map(function(f) {
@@ -649,29 +654,33 @@ var groundTruth = groundTruthRaw.map(function(f) {
   return f.set(classProperty, classInt);
 });
 
-// Print sample distribution per class
+// Create 20m buffer polygons around each GPS point for better pixel sampling
+// This captures 2x2 pixel neighborhoods at 10m resolution
+var groundTruthBuffered = groundTruth.map(function(f) {
+  return f.setGeometry(f.geometry().buffer(20));
+});
+
 print('========== TRAINING DATA SUMMARY ==========');
 print('Total ground truth points:', groundTruth.size());
 print('Water Bodies:', groundTruth.filter(ee.Filter.eq(classProperty, 0)).size());
-print('Vegetation:', groundTruth.filter(ee.Filter.eq(classProperty, 1)).size());
+print('Vegetation (incl. Agricultural Field):', groundTruth.filter(ee.Filter.eq(classProperty, 1)).size());
 print('Barren Land:', groundTruth.filter(ee.Filter.eq(classProperty, 2)).size());
 print('Seabuckthorn:', groundTruth.filter(ee.Filter.eq(classProperty, 3)).size());
-print('Agricultural Field:', groundTruth.filter(ee.Filter.eq(classProperty, 4)).size());
 
 Map.addLayer(groundTruth, {color: 'FF00FF'}, 'Ground Truth Points');
+Map.addLayer(groundTruthBuffered, {color: 'FFFF00'}, 'Ground Truth 20m Buffers', false);
 
 // ============================================================
 // SECTION 4: SENTINEL-2 CLOUD-FREE COMPOSITE (JUNE–SEPTEMBER)
 // ============================================================
 
-// Cloud masking using Scene Classification Layer (SCL)
 function maskS2Clouds(image) {
   var scl = image.select('SCL');
   var clearMask = scl.eq(4)   // Vegetation
     .or(scl.eq(5))            // Bare soil
     .or(scl.eq(6))            // Water
-    .or(scl.eq(7))            // Unclassified — critical for arid Ladakh terrain
-    .or(scl.eq(11));          // Snow/Ice at high elevations
+    .or(scl.eq(7))            // Unclassified (critical for arid Ladakh)
+    .or(scl.eq(11));          // Snow/Ice
   return image.updateMask(clearMask);
 }
 
@@ -684,7 +693,8 @@ var s2 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
 print('========== SENTINEL-2 IMAGERY ==========');
 print('Sentinel-2 scenes used:', s2.size());
 
-var bands = ['B2', 'B3', 'B4', 'B8', 'B11', 'B12'];
+// Core spectral bands + Red Edge bands for SBT separation
+var bands = ['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B11', 'B12'];
 var composite = s2.select(bands).median().clip(roi);
 
 Map.addLayer(composite, {
@@ -700,13 +710,13 @@ Map.addLayer(composite, {
 }, 'SWIR-NIR-R (Seabuckthorn Enhanced)', false);
 
 // ============================================================
-// SECTION 5: SPECTRAL INDICES (IMPROVED)
+// SECTION 5: SPECTRAL INDICES
 // ============================================================
 
-// NDVI — Normalized Difference Vegetation Index
+// NDVI
 var ndvi = composite.normalizedDifference(['B8', 'B4']).rename('NDVI');
 
-// SAVI — Soil Adjusted Vegetation Index (L=0.5 for sparse canopy in cold desert)
+// SAVI (L=0.5 for sparse cold desert canopy)
 var savi = composite.expression(
   '((NIR - RED) / (NIR + RED + L)) * (1 + L)', {
     'NIR': composite.select('B8'),
@@ -714,17 +724,16 @@ var savi = composite.expression(
     'L': 0.5
   }).rename('SAVI');
 
-// MNDWI — Modified NDWI using SWIR instead of NIR
-// Much better than NDWI for separating water from snow/ice/shadow
+// MNDWI — uses SWIR instead of NIR, far better at separating water from snow/ice/shadow
 var mndwi = composite.normalizedDifference(['B3', 'B11']).rename('MNDWI');
 
-// NDWI — kept for compatibility but MNDWI is primary water index
+// NDWI — kept as supplementary feature
 var ndwi = composite.normalizedDifference(['B3', 'B8']).rename('NDWI');
 
-// NDBI — Normalized Difference Built-up/Barren Index
+// NDBI — barren/built-up index
 var ndbi = composite.normalizedDifference(['B11', 'B8']).rename('NDBI');
 
-// BSI — Bare Soil Index (better barren land separation in cold desert)
+// BSI — Bare Soil Index for better barren land detection in arid terrain
 var bsi = composite.expression(
   '((SWIR1 + RED) - (NIR + BLUE)) / ((SWIR1 + RED) + (NIR + BLUE))', {
     'SWIR1': composite.select('B11'),
@@ -732,6 +741,16 @@ var bsi = composite.expression(
     'NIR': composite.select('B8'),
     'BLUE': composite.select('B2')
   }).rename('BSI');
+
+// Red Edge NDVI — separates Seabuckthorn from agriculture/general vegetation
+var reNDVI = composite.normalizedDifference(['B7', 'B5']).rename('RENDVI');
+
+// Red Edge chlorophyll index — sensitive to canopy structure differences
+var reCl = composite.expression(
+  '(NIR / RE1) - 1', {
+    'NIR': composite.select('B7'),
+    'RE1': composite.select('B5')
+  }).rename('RECI');
 
 Map.addLayer(ndvi, {min: -0.2, max: 0.8, palette: ['brown','yellow','green']}, 'NDVI', false);
 Map.addLayer(savi, {min: -0.2, max: 0.6, palette: ['brown','yellow','green']}, 'SAVI', false);
@@ -760,15 +779,10 @@ Map.addLayer(slope, {min: 0, max: 50, palette: ['green','yellow','red']}, 'Slope
 Map.addLayer(aspect, {min: 0, max: 360, palette: ['red','yellow','green','cyan','blue','magenta','red']}, 'Aspect', false);
 
 // ============================================================
-// SECTION 7: MULTI-BAND INPUT STACK FOR CLASSIFICATION
+// SECTION 7: MULTI-BAND INPUT STACK
 // ============================================================
 
-// Red Edge bands improve Seabuckthorn vs Agriculture separation
-var s2RedEdge = s2.select(['B5', 'B6', 'B7']).median().clip(roi);
-var reNDVI = s2RedEdge.normalizedDifference(['B7', 'B5']).rename('RENDVI');
-
 var inputImage = composite
-  .addBands(s2RedEdge)
   .addBands(ndvi)
   .addBands(savi)
   .addBands(mndwi)
@@ -776,6 +790,7 @@ var inputImage = composite
   .addBands(ndbi)
   .addBands(bsi)
   .addBands(reNDVI)
+  .addBands(reCl)
   .addBands(dem)
   .addBands(slope)
   .addBands(aspect);
@@ -783,46 +798,69 @@ var inputImage = composite
 var inputBands = inputImage.bandNames();
 print('========== CLASSIFICATION INPUT ==========');
 print('Input bands:', inputBands);
+print('Total band count:', inputBands.length());
 
 // ============================================================
-// SECTION 8: SAMPLE EXTRACTION AND 70/30 SPLIT
+// SECTION 8: SAMPLE EXTRACTION WITH 20m BUFFER POLYGONS
 // ============================================================
 
+// Sample using buffered polygons (20m) for more representative pixel capture
 var samples = inputImage.sampleRegions({
-  collection: groundTruth,
+  collection: groundTruthBuffered,
   properties: [classProperty],
   scale: 10,
-  tileScale: 8
+  tileScale: 8,
+  geometries: false
 });
 
-// Remove samples that fell on masked pixels (use band name directly, not getInfo)
+// Remove samples on masked pixels
 samples = samples.filter(ee.Filter.notNull(['B2', 'B3', 'B4', 'B8', 'NDVI', 'Elevation']));
 
-print('Total samples extracted:', samples.size());
+print('Total pixels sampled from buffered polygons:', samples.size());
 
+// 70/30 train-validation split with fixed seed for reproducibility
 var samplesWithRandom = samples.randomColumn('random', 42);
 var trainingSamples = samplesWithRandom.filter(ee.Filter.lt('random', 0.7));
 var validationSamples = samplesWithRandom.filter(ee.Filter.gte('random', 0.7));
 
-// Balance training samples — cap each class to prevent majority class dominance
-var minClassCount = 50;
+// ============================================================
+// SECTION 8b: CLASS-BALANCED SAMPLING
+// ============================================================
+
+// Find minimum class size to balance training
+var waterCount = trainingSamples.filter(ee.Filter.eq(classProperty, 0)).size();
+var vegCount = trainingSamples.filter(ee.Filter.eq(classProperty, 1)).size();
+var barrenCount = trainingSamples.filter(ee.Filter.eq(classProperty, 2)).size();
+var sbtCount = trainingSamples.filter(ee.Filter.eq(classProperty, 3)).size();
+
+print('--- Pre-balance training counts ---');
+print('Water Bodies:', waterCount);
+print('Vegetation:', vegCount);
+print('Barren Land:', barrenCount);
+print('Seabuckthorn:', sbtCount);
+
+// Balance: cap each class to the minimum class size (prevents majority dominance)
+var minClassSize = waterCount.min(vegCount).min(barrenCount).min(sbtCount);
+
 var balancedTraining = ee.FeatureCollection(
-  ee.List([0, 1, 2, 3, 4]).map(function(c) {
-    return trainingSamples.filter(ee.Filter.eq(classProperty, c)).limit(minClassCount);
+  ee.List([0, 1, 2, 3]).map(function(c) {
+    return trainingSamples
+      .filter(ee.Filter.eq(classProperty, c))
+      .randomColumn('bal_random', 99)
+      .sort('bal_random')
+      .limit(minClassSize);
   })
 ).flatten();
 
-print('Balanced training samples:', balancedTraining.size());
-
-print('Training samples (70%):', trainingSamples.size());
-print('Validation samples (30%):', validationSamples.size());
+print('Balanced training samples per class:', minClassSize);
+print('Total balanced training samples:', balancedTraining.size());
+print('Validation samples (30%, unbalanced):', validationSamples.size());
 
 // ============================================================
 // SECTION 9: RANDOM FOREST CLASSIFIER (100 TREES)
 // ============================================================
 
-// Use 200 trees for better generalization with balanced samples
-var classifier = ee.Classifier.smileRandomForest(200)
+var classifier = ee.Classifier.smileRandomForest(100)
   .train({
     features: balancedTraining,
     classProperty: classProperty,
@@ -840,51 +878,40 @@ print('Feature importance:', importance);
 var classifiedRaw = inputImage.classify(classifier).clip(roi);
 
 Map.addLayer(classifiedRaw, {
-  min: 0, max: 4,
+  min: 0, max: 3,
   palette: classPalette
-}, 'LULC (Raw — Before Correction)', false);
+}, 'LULC (Raw — Before Ecological Correction)', false);
 
 // ============================================================
 // SECTION 10b: POST-CLASSIFICATION ECOLOGICAL CORRECTIONS
 // ============================================================
-// Seabuckthorn in Ladakh grows ONLY:
-//   - Between 2800–4000m elevation
-//   - On gentle slopes (<25°) along river corridors/alluvial deposits
-//   - Where NDVI > 0.15 (it is green vegetation)
-// Water Bodies should NOT appear:
-//   - On steep slopes (>15°)
-//   - At extremely high elevations (>5000m) unless glacial lakes
-//   - Where MNDWI < 0 (not actually water)
 
 var elevation = dem.select('Elevation');
 
-// Fix 1: Seabuckthorn (class 3) → Barren Land (2) if outside ecological range
+// FIX 1: Seabuckthorn only at 2800–4000m, gentle slopes, and must be green
 var sbtElevMask = elevation.gte(2800).and(elevation.lte(4000));
 var sbtSlopeMask = slope.lte(25);
 var sbtNdviMask = ndvi.gte(0.15);
 var sbtValidZone = sbtElevMask.and(sbtSlopeMask).and(sbtNdviMask);
 
-// Fix 2: Water Bodies (class 0) → Barren Land (2) if on steep slopes or false detection
+// FIX 2: Water Bodies must be below 4500m, gentle slopes, positive MNDWI
 var waterSlopeMask = slope.lte(15);
 var waterMndwiMask = mndwi.gte(-0.1);
-var waterElevMask = elevation.lte(5000);
+var waterElevMask = elevation.lte(4500);
 var waterValidZone = waterSlopeMask.and(waterMndwiMask).and(waterElevMask);
 
-// Fix 3: Vegetation (class 1) should have NDVI > 0.1
+// FIX 3: Vegetation must show greenness
 var vegNdviMask = ndvi.gte(0.1);
 
 // Apply corrections
 var classified = classifiedRaw
-  // Seabuckthorn outside valid zone → reclassify to Barren Land
   .where(classifiedRaw.eq(3).and(sbtValidZone.not()), 2)
-  // Water on steep slopes or no MNDWI signal → Barren Land
   .where(classifiedRaw.eq(0).and(waterValidZone.not()), 2)
-  // Vegetation with no green signal → Barren Land
   .where(classifiedRaw.eq(1).and(vegNdviMask.not()), 2)
   .clip(roi);
 
 Map.addLayer(classified, {
-  min: 0, max: 4,
+  min: 0, max: 3,
   palette: classPalette
 }, 'LULC Classification (Corrected)');
 
@@ -899,10 +926,10 @@ print('========== ACCURACY ASSESSMENT ==========');
 print('Confusion Matrix:', confusionMatrix);
 print('Overall Accuracy:', confusionMatrix.accuracy());
 print('Kappa Coefficient:', confusionMatrix.kappa());
-print('Producers Accuracy:', confusionMatrix.producersAccuracy());
-print('Users Accuracy:', confusionMatrix.consumersAccuracy());
+print('Producers Accuracy (rows):', confusionMatrix.producersAccuracy());
+print('Users Accuracy (columns):', confusionMatrix.consumersAccuracy());
 
-// Build exportable accuracy table
+// Build exportable accuracy table with per-class metrics
 var overallAccuracy = confusionMatrix.accuracy();
 var kappa = confusionMatrix.kappa();
 var producersAcc = confusionMatrix.producersAccuracy();
@@ -931,7 +958,7 @@ var accuracyExport = ee.FeatureCollection(accuracyFeatures)
 // SECTION 12: CLASS AREA CALCULATION (HECTARES & SQ KM)
 // ============================================================
 
-var pixelArea = ee.Image.pixelArea().divide(10000); // m² → hectares
+var pixelArea = ee.Image.pixelArea().divide(10000); // m² to hectares
 
 var areaByClass = classNames.map(function(name, index) {
   var classMask = classified.eq(ee.Number(index));
@@ -956,13 +983,48 @@ var areaTable = ee.FeatureCollection(areaByClass);
 print('========== CLASS AREA STATISTICS ==========');
 print('Area by LULC class:', areaTable);
 
-// Print a formatted summary
+// Print formatted area for each class
 classNames.forEach(function(name, index) {
   var feat = ee.Feature(areaTable.filter(ee.Filter.eq('Class_Value', index)).first());
-  var ha = feat.get('Area_Hectares');
-  var sqkm = feat.get('Area_SqKm');
-  print(name + ': ', ha, ' ha | ', sqkm, ' sq km');
+  print(name + ':', feat.get('Area_Hectares'), 'ha |', feat.get('Area_SqKm'), 'sq km');
 });
+
+// ============================================================
+// SECTION 12b: AREA SUMMARY TABLE (PRINTED IN CONSOLE)
+// ============================================================
+
+// Compute total area for percentage calculation
+var totalArea = pixelArea.reduceRegion({
+  reducer: ee.Reducer.sum(),
+  geometry: roi,
+  scale: 10,
+  maxPixels: 1e13,
+  tileScale: 4
+});
+var totalHa = ee.Number(totalArea.get('area'));
+
+var areaWithPercent = classNames.map(function(name, index) {
+  var classMask = classified.eq(ee.Number(index));
+  var classArea = pixelArea.updateMask(classMask).reduceRegion({
+    reducer: ee.Reducer.sum(),
+    geometry: roi,
+    scale: 10,
+    maxPixels: 1e13,
+    tileScale: 4
+  });
+  var areaHa = ee.Number(classArea.get('area'));
+  return ee.Feature(null, {
+    'Class': name,
+    'Class_Value': index,
+    'Area_Hectares': areaHa,
+    'Area_SqKm': areaHa.divide(100),
+    'Percentage': areaHa.divide(totalHa).multiply(100)
+  });
+});
+
+var areaTableFull = ee.FeatureCollection(areaWithPercent);
+print('========== AREA TABLE WITH PERCENTAGES ==========');
+print(areaTableFull);
 
 // ============================================================
 // SECTION 13: MAP LEGEND
@@ -976,7 +1038,7 @@ var legend = ui.Panel({
   }
 });
 
-legend.add(ui.Label('LULC Classification', {
+legend.add(ui.Label('LULC Classification — Ladakh', {
   fontWeight: 'bold', fontSize: '14px', margin: '0 0 6px 0'
 }));
 
@@ -1023,13 +1085,13 @@ Export.table.toDrive({
   selectors: ['Class', 'Class_Value', 'Producers_Accuracy', 'Users_Accuracy']
 });
 
-// 14c. Class area statistics (CSV)
+// 14c. Class area statistics with percentages (CSV)
 Export.table.toDrive({
-  collection: areaTable,
+  collection: areaTableFull,
   description: 'Class_Area_Statistics',
   folder: 'LULC_Seabuckthorn_Project',
   fileFormat: 'CSV',
-  selectors: ['Class', 'Class_Value', 'Area_Hectares', 'Area_SqKm']
+  selectors: ['Class', 'Class_Value', 'Area_Hectares', 'Area_SqKm', 'Percentage']
 });
 
 // 14d. Multi-band input composite for reproducibility
