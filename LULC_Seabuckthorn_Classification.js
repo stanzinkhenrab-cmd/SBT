@@ -700,7 +700,7 @@ Map.addLayer(composite, {
 }, 'SWIR-NIR-R (Seabuckthorn Enhanced)', false);
 
 // ============================================================
-// SECTION 5: SPECTRAL INDICES
+// SECTION 5: SPECTRAL INDICES (IMPROVED)
 // ============================================================
 
 // NDVI — Normalized Difference Vegetation Index
@@ -714,16 +714,31 @@ var savi = composite.expression(
     'L': 0.5
   }).rename('SAVI');
 
-// NDWI — Normalized Difference Water Index (McFeeters)
+// MNDWI — Modified NDWI using SWIR instead of NIR
+// Much better than NDWI for separating water from snow/ice/shadow
+var mndwi = composite.normalizedDifference(['B3', 'B11']).rename('MNDWI');
+
+// NDWI — kept for compatibility but MNDWI is primary water index
 var ndwi = composite.normalizedDifference(['B3', 'B8']).rename('NDWI');
 
 // NDBI — Normalized Difference Built-up/Barren Index
 var ndbi = composite.normalizedDifference(['B11', 'B8']).rename('NDBI');
 
+// BSI — Bare Soil Index (better barren land separation in cold desert)
+var bsi = composite.expression(
+  '((SWIR1 + RED) - (NIR + BLUE)) / ((SWIR1 + RED) + (NIR + BLUE))', {
+    'SWIR1': composite.select('B11'),
+    'RED': composite.select('B4'),
+    'NIR': composite.select('B8'),
+    'BLUE': composite.select('B2')
+  }).rename('BSI');
+
 Map.addLayer(ndvi, {min: -0.2, max: 0.8, palette: ['brown','yellow','green']}, 'NDVI', false);
 Map.addLayer(savi, {min: -0.2, max: 0.6, palette: ['brown','yellow','green']}, 'SAVI', false);
+Map.addLayer(mndwi, {min: -0.5, max: 0.5, palette: ['brown','white','blue']}, 'MNDWI', false);
 Map.addLayer(ndwi, {min: -0.5, max: 0.5, palette: ['brown','white','blue']}, 'NDWI', false);
 Map.addLayer(ndbi, {min: -0.3, max: 0.3, palette: ['green','white','red']}, 'NDBI', false);
+Map.addLayer(bsi, {min: -0.3, max: 0.3, palette: ['green','white','brown']}, 'BSI', false);
 
 // ============================================================
 // SECTION 6: TOPOGRAPHIC VARIABLES (DEM, SLOPE, ASPECT)
@@ -748,11 +763,19 @@ Map.addLayer(aspect, {min: 0, max: 360, palette: ['red','yellow','green','cyan',
 // SECTION 7: MULTI-BAND INPUT STACK FOR CLASSIFICATION
 // ============================================================
 
+// Red Edge bands improve Seabuckthorn vs Agriculture separation
+var s2RedEdge = s2.select(['B5', 'B6', 'B7']).median().clip(roi);
+var reNDVI = s2RedEdge.normalizedDifference(['B7', 'B5']).rename('RENDVI');
+
 var inputImage = composite
+  .addBands(s2RedEdge)
   .addBands(ndvi)
   .addBands(savi)
+  .addBands(mndwi)
   .addBands(ndwi)
   .addBands(ndbi)
+  .addBands(bsi)
+  .addBands(reNDVI)
   .addBands(dem)
   .addBands(slope)
   .addBands(aspect);
@@ -772,11 +795,23 @@ var samples = inputImage.sampleRegions({
   tileScale: 8
 });
 
+// Remove any null samples (points that fell on masked pixels)
+samples = samples.filter(ee.Filter.notNull(inputImage.bandNames().getInfo()));
+
 print('Total samples extracted:', samples.size());
 
 var samplesWithRandom = samples.randomColumn('random', 42);
 var trainingSamples = samplesWithRandom.filter(ee.Filter.lt('random', 0.7));
 var validationSamples = samplesWithRandom.filter(ee.Filter.gte('random', 0.7));
+
+// Balance training samples — cap each class to prevent majority class dominance
+// Use the smallest class count as the target (or set a max)
+var minClassCount = 50; // approximate minimum (Seabuckthorn/Water are smallest)
+var balancedTraining = ee.FeatureCollection([0, 1, 2, 3, 4].map(function(c) {
+  return trainingSamples.filter(ee.Filter.eq(classProperty, c)).limit(minClassCount);
+})).flatten();
+
+print('Balanced training samples:', balancedTraining.size());
 
 print('Training samples (70%):', trainingSamples.size());
 print('Validation samples (30%):', validationSamples.size());
@@ -785,9 +820,10 @@ print('Validation samples (30%):', validationSamples.size());
 // SECTION 9: RANDOM FOREST CLASSIFIER (100 TREES)
 // ============================================================
 
-var classifier = ee.Classifier.smileRandomForest(100)
+// Use 200 trees for better generalization with balanced samples
+var classifier = ee.Classifier.smileRandomForest(200)
   .train({
-    features: trainingSamples,
+    features: balancedTraining,
     classProperty: classProperty,
     inputProperties: inputBands
   });
@@ -800,12 +836,56 @@ print('Feature importance:', importance);
 // SECTION 10: CLASSIFY THE STUDY AREA
 // ============================================================
 
-var classified = inputImage.classify(classifier).clip(roi);
+var classifiedRaw = inputImage.classify(classifier).clip(roi);
+
+Map.addLayer(classifiedRaw, {
+  min: 0, max: 4,
+  palette: classPalette
+}, 'LULC (Raw — Before Correction)', false);
+
+// ============================================================
+// SECTION 10b: POST-CLASSIFICATION ECOLOGICAL CORRECTIONS
+// ============================================================
+// Seabuckthorn in Ladakh grows ONLY:
+//   - Between 2800–4000m elevation
+//   - On gentle slopes (<25°) along river corridors/alluvial deposits
+//   - Where NDVI > 0.15 (it is green vegetation)
+// Water Bodies should NOT appear:
+//   - On steep slopes (>15°)
+//   - At extremely high elevations (>5000m) unless glacial lakes
+//   - Where MNDWI < 0 (not actually water)
+
+var elevation = dem.select('Elevation');
+
+// Fix 1: Seabuckthorn (class 3) → Barren Land (2) if outside ecological range
+var sbtElevMask = elevation.gte(2800).and(elevation.lte(4000));
+var sbtSlopeMask = slope.lte(25);
+var sbtNdviMask = ndvi.gte(0.15);
+var sbtValidZone = sbtElevMask.and(sbtSlopeMask).and(sbtNdviMask);
+
+// Fix 2: Water Bodies (class 0) → Barren Land (2) if on steep slopes or false detection
+var waterSlopeMask = slope.lte(15);
+var waterMndwiMask = mndwi.gte(-0.1);
+var waterElevMask = elevation.lte(5000);
+var waterValidZone = waterSlopeMask.and(waterMndwiMask).and(waterElevMask);
+
+// Fix 3: Vegetation (class 1) should have NDVI > 0.1
+var vegNdviMask = ndvi.gte(0.1);
+
+// Apply corrections
+var classified = classifiedRaw
+  // Seabuckthorn outside valid zone → reclassify to Barren Land
+  .where(classifiedRaw.eq(3).and(sbtValidZone.not()), 2)
+  // Water on steep slopes or no MNDWI signal → Barren Land
+  .where(classifiedRaw.eq(0).and(waterValidZone.not()), 2)
+  // Vegetation with no green signal → Barren Land
+  .where(classifiedRaw.eq(1).and(vegNdviMask.not()), 2)
+  .clip(roi);
 
 Map.addLayer(classified, {
   min: 0, max: 4,
   palette: classPalette
-}, 'LULC Classification');
+}, 'LULC Classification (Corrected)');
 
 // ============================================================
 // SECTION 11: ACCURACY ASSESSMENT
