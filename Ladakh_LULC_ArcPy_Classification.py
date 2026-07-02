@@ -1,12 +1,13 @@
 # ==============================================================================
 # ARCGIS PRO (ARCPY) SUPERVISED LULC CLASSIFICATION WORKFLOW
-# Region: Ladakh/Nubra, India (Cold-Arid Himalayan Riverine Ecosystem)
-# Target: 7-Class LULC Mapping (including Seabuckthorn & Agriculture)
+# Region: Nubra Valley, Ladakh, India (Cold-Arid Himalayan Riverine Ecosystem)
+# Classes (from nubra_lulc_training_points.csv):
+#   1 = Water | 2 = Vegetation | 3 = Seabuck Thorn | 4 = Sand
+#   5 = Snow  | 6 = Agricultural Field | 7 = Barren Land
 # ==============================================================================
 
 import arcpy
 from arcpy.sa import *
-from arcpy.ia import *
 import os
 
 # Check out required extensions
@@ -14,127 +15,141 @@ arcpy.CheckOutExtension("Spatial")
 arcpy.CheckOutExtension("ImageAnalyst")
 
 # ==============================================================================
-# WORKSPACE & DATA INPUTS
+# WORKSPACE & DATA INPUTS  (EDIT THESE to match your project)
 # ==============================================================================
-# Set your geodatabase workspace (Based on your nubra project folder)
-arcpy.env.workspace = r"C:\Users\admin\Documents\ArcGIS\Projects\nubra\nubra.gdb"
+# Auto-detects the geodatabase of the currently open ArcGIS Pro project.
+# Replace with an explicit path if running outside Pro (e.g. r"C:\...\nubra.gdb").
+aprx = arcpy.mp.ArcGISProject("CURRENT")
+arcpy.env.workspace = aprx.defaultGeodatabase
 arcpy.env.overwriteOutput = True
 
-# Inputs (Matching the exact names inside your nubra.gdb)
-s2_raster_path = "S2_Median_Composite_Nubra_tif"
-dem_path = "SRTM_Nubra_DEM_tif"
-training_points = "Nubra_Training_Points"
+# Rasters already loaded in your map (from the Contents pane)
+dem_path = "SRTM_Nubra_DEM.tif"
+s2_raster_path = "S2_Median_Composite_Nubra.tif"
 
-# Define output names
+# Raw ground-truth CSV (Class, Latitude, Longitude columns)
+training_csv = r"C:\Users\admin\Documents\ArcGIS\Projects\nubra\nubra_lulc_training_points.csv"
+
+# Output names
+training_points_raw = "Training_Points_WGS84"
+training_points = "Training_Points"
 output_rf_model = "RF_Model.ecd"
 output_classified = "Classified_LULC"
 output_refined = "Refined_LULC"
 
-print("Starting Ladakh LULC Workflow...")
+# Class name -> numeric ClassID used to train the classifier
+CLASS_MAP = {
+    "Water": 1,
+    "Vegetation": 2,
+    "Seabuck Thorn": 3,
+    "Sand": 4,
+    "Snow": 5,
+    "Agricultural Field": 6,
+    "Barren Land": 7,
+}
+
+print("Starting Nubra LULC Workflow...")
 
 # ==============================================================================
-# 1. STUDY AREA (ROI)
+# 1. STUDY AREA
 # ==============================================================================
-# Create the ROI polygon geometry
-roi_array = arcpy.Array([
-    arcpy.Point(77.306500, 34.678861),
-    arcpy.Point(77.306500, 34.515667),
-    arcpy.Point(77.707361, 34.515667),
-    arcpy.Point(77.707361, 34.678861),
-    arcpy.Point(77.306500, 34.678861)
-])
-spatial_ref = arcpy.SpatialReference(4326)  # WGS84
-roi_polygon = arcpy.Polygon(roi_array, spatial_ref)
-
-# Persist the ROI as a feature class. arcpy.env.mask requires a path to a
-# raster/feature class dataset - it cannot accept a raw in-memory geometry.
-roi_fc = os.path.join(arcpy.env.workspace, "ROI_Polygon")
-arcpy.management.CopyFeatures(roi_polygon, roi_fc)
-
-# Set analysis environments to restrict processing to the ROI.
-# arcpy.env.extent needs an Extent object (not a Polygon), hence ".extent".
-# arcpy.env.mask needs a dataset reference, hence the feature class path.
-arcpy.env.extent = roi_polygon.extent
-arcpy.env.mask = roi_fc
+# The DEM and Sentinel-2 composite are already clipped to the Nubra study area,
+# so processing extent/mask/snap can be read straight from the DEM instead of
+# building a separate ROI polygon (env.extent/env.mask only accept dataset
+# paths or Extent objects, never a raw in-memory geometry).
+arcpy.env.extent = dem_path
+arcpy.env.mask = dem_path
+arcpy.env.snapRaster = dem_path
+arcpy.env.cellSize = dem_path
 
 # ==============================================================================
 # 2. GROUND TRUTH DATA PREPARATION
 # ==============================================================================
 print("Preparing Training Data...")
-# Buffer the points by 20 meters to capture S2 pixels
-training_buffers = "Training_Buffers_20m"
-arcpy.analysis.Buffer(training_points, training_buffers, "20 Meters")
+
+# Build points from the CSV (lat/long in WGS84) ...
+arcpy.management.XYTableToPoint(
+    training_csv, training_points_raw, "Longitude", "Latitude", None,
+    arcpy.SpatialReference(4326)
+)
+
+# ... then reproject to match the imagery so distances/pixels line up correctly.
+s2_sr = arcpy.Describe(s2_raster_path).spatialReference
+arcpy.management.Project(training_points_raw, training_points, s2_sr)
+
+# Convert the text "Class" field to a numeric "ClassID" field for the classifier
+arcpy.management.AddField(training_points, "ClassID", "SHORT")
+class_code_block = f"""
+class_map = {CLASS_MAP!r}
+def get_class_id(cls):
+    return class_map.get(cls, 0)
+"""
+arcpy.management.CalculateField(
+    training_points, "ClassID", "get_class_id(!Class!)", "PYTHON3", class_code_block
+)
 
 # Create Train/Test Split (70/30)
-arcpy.management.AddField(training_buffers, "Split_Rand", "DOUBLE")
-arcpy.management.CalculateField(training_buffers, "Split_Rand", "arcpy.rand()", "PYTHON3")
+arcpy.management.AddField(training_points, "Split_Rand", "DOUBLE")
+arcpy.management.CalculateField(
+    training_points, "Split_Rand", "random.random()", "PYTHON3", "import random"
+)
 
 train_data = "Training_Data_70"
 test_data = "Validation_Data_30"
-arcpy.analysis.Select(training_buffers, train_data, "Split_Rand <= 0.7")
-arcpy.analysis.Select(training_buffers, test_data, "Split_Rand > 0.7")
+arcpy.analysis.Select(training_points, train_data, "Split_Rand <= 0.7")
+arcpy.analysis.Select(training_points, test_data, "Split_Rand > 0.7")
 
 # ==============================================================================
-# 6. & 7. SPECTRAL PREDICTORS AND INDICES
+# 3. SPECTRAL PREDICTORS AND INDICES
 # ==============================================================================
 print("Calculating Spectral Indices...")
-s2_img = Raster(s2_raster_path)
 
-# Map bands (Assuming standard S2 band order: 1=B2, 2=B3, 3=B4, 4=B5, 5=B6, 6=B7, 7=B8, 8=B11, 9=B12)
-b2 = Raster(s2_raster_path + "/Band_1")  # Blue
-b3 = Raster(s2_raster_path + "/Band_2")  # Green
-b4 = Raster(s2_raster_path + "/Band_3")  # Red
-b5 = Raster(s2_raster_path + "/Band_4")  # Red Edge 1
-b8 = Raster(s2_raster_path + "/Band_7")  # NIR
-b11 = Raster(s2_raster_path + "/Band_8")  # SWIR 1
-b12 = Raster(s2_raster_path + "/Band_9")  # SWIR 2
+# Band mapping for the 7-band Nubra composite (named after their source S2 band)
+b3 = Raster(s2_raster_path + "/Band_2")   # Green (B3)
+b4 = Raster(s2_raster_path + "/Band_3")   # Red   (B4)
+b8 = Raster(s2_raster_path + "/Band_7")   # NIR   (B8)
+b11 = Raster(s2_raster_path + "/Band_8")  # SWIR1 (B11)
 
-# Calculate Core Indices (Using ArcPy map algebra)
 ndvi = Float(b8 - b4) / Float(b8 + b4)
-ndwi = Float(b3 - b8) / Float(b3 + b8)
-mndwi = Float(b3 - b11) / Float(b3 + b11)
-ndsi = Float(b3 - b11) / Float(b3 + b11)
-ndbi = Float(b11 - b8) / Float(b11 + b8)
-savi = ((Float(b8 - b4) / Float(b8 + b4 + 0.5)) * 1.5)
+mndwi = Float(b3 - b11) / Float(b3 + b11)     # Water index
+ndsi = Float(b3 - b11) / Float(b3 + b11)      # Snow index (same bands, different use/threshold)
+savi = (Float(b8 - b4) / Float(b8 + b4 + 0.5)) * 1.5
 
-# Save indices to disk temporarily (to prevent memory overload during RF)
 ndvi.save("temp_ndvi")
 mndwi.save("temp_mndwi")
-savi.save("temp_savi")
 ndsi.save("temp_ndsi")
+savi.save("temp_savi")
 
 # ==============================================================================
-# 8. TERRAIN VARIABLES
+# 4. TERRAIN VARIABLES
 # ==============================================================================
 print("Generating Terrain Variables...")
 dem = Raster(dem_path)
-slope = SurfaceParameters(dem, "SLOPE", "DEGREE")
-aspect = SurfaceParameters(dem, "ASPECT")
-# Simple Terrain Ruggedness (Focal Statistics as proxy)
+# Slope/Aspect via Spatial Analyst (avoids needing a separate 3D Analyst license,
+# which SurfaceParameters requires).
+slope = Slope(dem, "DEGREE")
 focal_min = FocalStatistics(dem, NbrRectangle(3, 3, "CELL"), "MINIMUM")
 focal_max = FocalStatistics(dem, NbrRectangle(3, 3, "CELL"), "MAXIMUM")
-tri = focal_max - focal_min
+tri = focal_max - focal_min  # Terrain ruggedness proxy
 
 slope.save("temp_slope")
 tri.save("temp_tri")
 
 # ==============================================================================
-# 10. FEATURE STACK
+# 5. FEATURE STACK
 # ==============================================================================
 print("Building Predictor Stack...")
-# Combine raw bands, indices, and terrain into one composite
 predictor_stack = "Predictor_Stack"
 arcpy.management.CompositeBands(
-    [s2_img, "temp_ndvi", "temp_mndwi", "temp_savi", "temp_ndsi", dem_path, "temp_slope", "temp_tri"],
+    [s2_raster_path, "temp_ndvi", "temp_mndwi", "temp_savi", "temp_ndsi",
+     dem_path, "temp_slope", "temp_tri"],
     predictor_stack
 )
 
 # ==============================================================================
-# 14. RANDOM FOREST CLASSIFICATION
+# 6. RANDOM FOREST CLASSIFICATION
 # ==============================================================================
 print("Training Random Forest Classifier...")
-# Train the model using the 70% split
-# "ClassID" matches the numeric class field generated from your CSV script
 arcpy.ia.TrainRandomTreesClassifier(
     in_raster=predictor_stack,
     in_training_features=train_data,
@@ -146,7 +161,6 @@ arcpy.ia.TrainRandomTreesClassifier(
 )
 
 print("Applying Classification...")
-# Classify the raster using the trained model
 classified_raster = arcpy.ia.ClassifyRaster(
     in_raster=predictor_stack,
     in_classifier_definition=output_rf_model
@@ -154,51 +168,55 @@ classified_raster = arcpy.ia.ClassifyRaster(
 classified_raster.save(output_classified)
 
 # ==============================================================================
-# 26. ECOLOGICAL RULE-BASED REFINEMENT
+# 7. ECOLOGICAL RULE-BASED REFINEMENT
 # ==============================================================================
+# Thresholds below are starting points - tune them against your own scatterplots
+# of NDVI/MNDWI/NDSI vs. elevation before relying on the refined output.
 print("Applying Ecological Refinements...")
-# Class mappings: 1=Seabuckthorn, 3=Nat Veg, 4=Water, 5=Barren Land
 
-# Reload layers for Map Algebra
 c_ras = Raster(output_classified)
 dem_ras = Raster(dem_path)
 slope_ras = Raster("temp_slope")
 ndvi_ras = Raster("temp_ndvi")
 mndwi_ras = Raster("temp_mndwi")
+ndsi_ras = Raster("temp_ndsi")
 
-# Rule 1: Seabuckthorn (Class 1) must be Elev 2800-4000m, Slope <= 25, NDVI >= 0.15
+# Seabuckthorn (3): riparian shrub belt, mid-elevation, gentle slope, vegetated
 sb_mask = (dem_ras >= 2800) & (dem_ras <= 4000) & (slope_ras <= 25) & (ndvi_ras >= 0.15)
 
-# Rule 2: Water (Class 4) must be Elev <= 4500, Slope <= 15, MNDWI >= -0.10
+# Water (1): low-lying, flat, wet spectral signature
 water_mask = (dem_ras <= 4500) & (slope_ras <= 15) & (mndwi_ras >= -0.10)
 
-# Rule 3: Natural Veg (Class 3) must be NDVI >= 0.10
+# Snow (5): high elevation with a strong snow index
+snow_mask = (dem_ras >= 3500) & (ndsi_ras >= 0.30)
+
+# Vegetation (2) / Agricultural Field (6): both require a minimum vegetation signal
 veg_mask = (ndvi_ras >= 0.10)
 
-# Apply nested Con statements to reclassify pixels failing the rules to Barren (5)
-refined_1 = Con((c_ras == 1) & (~sb_mask), 5, c_ras)
-refined_2 = Con((refined_1 == 4) & (~water_mask), 5, refined_1)
-refined_final = Con((refined_2 == 3) & (~veg_mask), 5, refined_2)
+# Pixels failing their class rule fall back to Barren Land (7)
+refined_1 = Con((c_ras == 3) & (~sb_mask), 7, c_ras)
+refined_2 = Con((refined_1 == 1) & (~water_mask), 7, refined_1)
+refined_3 = Con((refined_2 == 5) & (~snow_mask), 7, refined_2)
+refined_4 = Con((refined_3 == 2) & (~veg_mask), 7, refined_3)
+refined_final = Con((refined_4 == 6) & (~veg_mask), 7, refined_4)
 
 refined_final.save(output_refined)
 print("Classification Refined and Saved.")
 
 # ==============================================================================
-# 24. ACCURACY ASSESSMENT
+# 8. ACCURACY ASSESSMENT
 # ==============================================================================
 print("Calculating Accuracy Metrics...")
 accuracy_points = "Accuracy_Assessment_Points"
 
-# Generate accuracy points from the 30% validation set
 arcpy.ia.CreateAccuracyAssessmentPoints(
     in_class_data=output_refined,
     out_points=accuracy_points,
     target_field="ClassID",
-    num_random_points=0,  # 0 means it uses all polygons provided below
+    num_random_points=0,  # 0 = use all validation features supplied below
     in_validation=test_data
 )
 
-# Compute Confusion Matrix
 confusion_matrix_table = "Confusion_Matrix"
 arcpy.ia.ComputeConfusionMatrix(
     in_accuracy_assessment_points=accuracy_points,
@@ -208,7 +226,7 @@ arcpy.ia.ComputeConfusionMatrix(
 print(f"Workflow Complete! Outputs saved in: {arcpy.env.workspace}")
 print("Check the generated 'Confusion_Matrix' table for OA, Kappa, and Producer/User accuracy.")
 
-# Clean up temporary rasters to keep your geodatabase tidy
+# Clean up temporary rasters
 temp_files = ["temp_ndvi", "temp_mndwi", "temp_savi", "temp_ndsi", "temp_slope", "temp_tri"]
 for tmp in temp_files:
     if arcpy.Exists(tmp):
