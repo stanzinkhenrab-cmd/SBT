@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Seabuckthorn Survey</string>
+    <string name="app_title">Seabuckthorn Field Survey – Ladakh</string>
+    <string name="developed_by">Developed by Stanzin Khenrab</string>
+    <string name="organisation_line">Krishi Vigyan Kendra – Leh, Ladakh</string>
+    <string name="scheme_line">MIDH-SBM</string>
+</resources>

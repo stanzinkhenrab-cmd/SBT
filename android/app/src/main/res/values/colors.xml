@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Seabuckthorn berry orange + Ladakh high-altitude tones. -->
+    <color name="sbt_primary">#B24A00</color>
+    <color name="sbt_surface">#FFFBF6</color>
+    <color name="ic_launcher_background">#FFF3E4</color>
+</resources>

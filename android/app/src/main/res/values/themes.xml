@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.SbtSurvey" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:statusBarColor">@color/sbt_primary</item>
+        <item name="android:navigationBarColor">@color/sbt_surface</item>
+        <item name="android:windowBackground">@color/sbt_surface</item>
+    </style>
+</resources>
