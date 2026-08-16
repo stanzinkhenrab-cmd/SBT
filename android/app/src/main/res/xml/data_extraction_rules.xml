@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Survey records, photographs and the surveyor profile move with the app to a new
+  phone. The osmdroid tile cache and generated export files are not listed, so
+  they are not carried over.
+-->
 <data-extraction-rules>
     <cloud-backup>
         <include
@@ -10,9 +15,6 @@
         <include
             domain="sharedpref"
             path="." />
-        <exclude
-            domain="file"
-            path="osmdroid/" />
     </cloud-backup>
     <device-transfer>
         <include

@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Only the survey database, the photo folder and the surveyor preferences are
+  backed up. Everything else in app storage - the osmdroid tile cache, generated
+  export files - is regenerable and is left out by not being included here.
+-->
 <full-backup-content>
     <include
         domain="database"
@@ -9,7 +14,4 @@
     <include
         domain="sharedpref"
         path="." />
-    <exclude
-        domain="file"
-        path="osmdroid/" />
 </full-backup-content>

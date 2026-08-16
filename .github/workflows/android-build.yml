@@ -11,6 +11,10 @@ on:
       - '.github/workflows/android-build.yml'
   workflow_dispatch:
 
+concurrency:
+  group: android-build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -38,7 +42,6 @@ jobs:
 
       - name: Lint
         run: ./gradlew lintDebug --stacktrace
-        continue-on-error: true
 
       - name: Assemble debug APK
         run: ./gradlew assembleDebug --stacktrace
