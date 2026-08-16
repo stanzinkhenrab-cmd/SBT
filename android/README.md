@@ -145,6 +145,11 @@ APKs on every push, and uploads them as downloadable build artifacts.
 
 ## Tests
 
+- `SurveyWorkflowTest` — the whole field workflow through the storage layer: new
+  survey, surveyor details, location, photo committed under the Survey ID, GPS,
+  plant data, auto-save, review, save, list, CSV/XLSX export and delete, with the
+  exported cells checked against what was entered. A second case covers the
+  record with no GPS fix and no photo, which must still save.
 - `SurveyDaoTest` — identifiers increment, never duplicate, survive concurrent
   starts, skip identifiers already present, and are never reissued after a
   deletion.
