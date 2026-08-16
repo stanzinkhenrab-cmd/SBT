@@ -364,7 +364,7 @@ private fun PhotoSection(
     onTakePhoto: () -> Unit,
     onRemovePhoto: () -> Unit
 ) {
-    val photo by rememberSurveyPhoto(survey.photoPath)
+    val photo = rememberSurveyPhoto(survey.photoPath)
     SectionCard(
         number = 3,
         title = "Photo",
@@ -372,7 +372,7 @@ private fun PhotoSection(
     ) {
         if (photo != null) {
             Image(
-                bitmap = photo!!,
+                bitmap = photo,
                 contentDescription = "Photograph for ${survey.surveyId}",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier

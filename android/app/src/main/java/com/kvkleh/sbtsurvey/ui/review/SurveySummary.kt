@@ -16,7 +16,6 @@ import androidx.compose.material.icons.filled.Science
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
@@ -74,10 +73,10 @@ fun SurveySummary(survey: SurveyEntity, modifier: Modifier = Modifier) {
             title = "Photo",
             modifier = Modifier.padding(bottom = 14.dp)
         ) {
-            val photo by rememberSurveyPhoto(survey.photoPath)
+            val photo = rememberSurveyPhoto(survey.photoPath)
             if (photo != null) {
                 Image(
-                    bitmap = photo!!,
+                    bitmap = photo,
                     contentDescription = "Photograph for ${survey.surveyId}",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier

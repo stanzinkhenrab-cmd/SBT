@@ -4,8 +4,11 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.State
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.exifinterface.media.ExifInterface
@@ -21,16 +24,18 @@ import java.io.File
  * an entry-level field phone.
  */
 @Composable
-fun rememberSurveyPhoto(path: String?, maxDimension: Int = 1280): State<ImageBitmap?> =
-    produceState<ImageBitmap?>(initialValue = null, path, maxDimension) {
-        value = if (path.isNullOrBlank()) {
-            null
-        } else {
-            withContext(Dispatchers.IO) {
-                decodeScaled(File(path), maxDimension)?.asImageBitmap()
-            }
+fun rememberSurveyPhoto(path: String?, maxDimension: Int = 1280): ImageBitmap? {
+    var bitmap by remember(path, maxDimension) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(path, maxDimension) {
+        if (path.isNullOrBlank()) {
+            bitmap = null
+            return@LaunchedEffect
         }
+        val decoded = withContext(Dispatchers.IO) { decodeScaled(File(path), maxDimension) }
+        bitmap = decoded?.asImageBitmap()
     }
+    return bitmap
+}
 
 private fun decodeScaled(file: File, maxDimension: Int): Bitmap? {
     if (!file.exists() || file.length() == 0L) return null
