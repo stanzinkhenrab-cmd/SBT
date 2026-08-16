@@ -13,7 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.core.splashscreen.installSplashScreen
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.kvk.leh.seabuckthorn.ui.navigation.Destinations
 import com.kvk.leh.seabuckthorn.ui.navigation.SeabuckthornNavGraph
 import com.kvk.leh.seabuckthorn.ui.theme.SeabuckthornTheme

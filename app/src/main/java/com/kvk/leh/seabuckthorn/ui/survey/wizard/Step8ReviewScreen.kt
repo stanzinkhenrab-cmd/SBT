@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import com.kvk.leh.seabuckthorn.domain.calculations.DescriptiveStatistics
 import com.kvk.leh.seabuckthorn.domain.model.GpsStatus
 import com.kvk.leh.seabuckthorn.ui.components.SectionCard

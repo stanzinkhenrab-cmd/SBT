@@ -27,7 +27,7 @@ class CameraController(private val context: Context) {
     suspend fun bindToLifecycle(lifecycleOwner: LifecycleOwner, previewView: PreviewView) {
         val provider = getCameraProvider()
         val preview = Preview.Builder().build().also {
-            it.surfaceProvider = previewView.surfaceProvider
+            it.setSurfaceProvider(previewView.surfaceProvider)
         }
         val capture = ImageCapture.Builder()
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
