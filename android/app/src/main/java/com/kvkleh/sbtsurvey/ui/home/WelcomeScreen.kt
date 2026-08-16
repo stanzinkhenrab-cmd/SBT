@@ -146,9 +146,9 @@ fun WelcomeScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Image(
-                    painter = painterResource(R.mipmap.ic_launcher_foreground),
+                    painter = painterResource(R.drawable.sbt_emblem),
                     contentDescription = null,
-                    modifier = Modifier.size(116.dp)
+                    modifier = Modifier.size(92.dp)
                 )
             }
 

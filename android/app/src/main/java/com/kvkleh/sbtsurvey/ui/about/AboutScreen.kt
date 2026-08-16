@@ -2,6 +2,7 @@ package com.kvkleh.sbtsurvey.ui.about
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -61,13 +62,18 @@ fun AboutScreen(onBack: () -> Unit) {
                 .padding(horizontal = 28.dp, vertical = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Image(
-                painter = painterResource(R.mipmap.ic_launcher_foreground),
-                contentDescription = null,
+            Box(
                 modifier = Modifier
                     .size(104.dp)
-                    .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape)
-            )
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.sbt_emblem),
+                    contentDescription = null,
+                    modifier = Modifier.size(80.dp)
+                )
+            }
 
             Spacer(Modifier.height(20.dp))
 
