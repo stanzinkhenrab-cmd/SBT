@@ -1,6 +1,7 @@
 package com.kvkleh.sbtsurvey.data.location
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.Location
@@ -77,6 +78,7 @@ class LocationService(context: Context) {
      * when it is at least as good as the best one seen so far, so the reading on
      * screen settles instead of flickering between providers.
      */
+    @SuppressLint("MissingPermission") // guarded by the hasPermission() check below
     fun statusUpdates(): Flow<GpsStatus> = callbackFlow {
         if (!hasPermission()) {
             trySend(GpsStatus.PermissionRequired)

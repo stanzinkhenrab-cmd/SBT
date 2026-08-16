@@ -82,7 +82,7 @@ class ExportFormatTest {
     fun `csv export has one header row and one row per record`() {
         val out = ByteArrayOutputStream()
         CsvWriter.write(listOf(sampleSurvey(), sampleSurvey().copy(id = 2, surveyId = "SBT-2026-0002")), out)
-        val text = out.toString("UTF-8").removePrefix("﻿")
+        val text = out.toString("UTF-8").removePrefix("\uFEFF")
         val lines = text.trim().split("\r\n")
         assertEquals(3, lines.size)
         assertTrue(lines[0].startsWith("Survey ID,"))
