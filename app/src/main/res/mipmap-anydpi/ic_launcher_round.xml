@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Non-adaptive launcher icon fallback for API < 26 devices: background baked directly into
+     the vector so no raster PNG assets are required. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FBF8F5"
+        android:pathData="M0,0 h108 v108 h-108 Z" />
+    <path
+        android:fillColor="#4B6B2F"
+        android:pathData="M54,55 C43,48 41,33 54,25 C67,33 65,48 54,55 Z" />
+    <path
+        android:strokeColor="#3A5424"
+        android:strokeWidth="1.5"
+        android:pathData="M54,55 L54,25" />
+    <path
+        android:fillColor="#E8792A"
+        android:pathData="M44,66 m-7,0 a7,7 0 1,0 14,0 a7,7 0 1,0 -14,0" />
+    <path
+        android:fillColor="#E8792A"
+        android:pathData="M54,73 m-7,0 a7,7 0 1,0 14,0 a7,7 0 1,0 -14,0" />
+    <path
+        android:fillColor="#E8792A"
+        android:pathData="M64,66 m-7,0 a7,7 0 1,0 14,0 a7,7 0 1,0 -14,0" />
+</vector>

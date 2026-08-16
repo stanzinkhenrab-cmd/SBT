@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The app requests no INTERNET permission at all (see AndroidManifest.xml) — this file exists
+    purely as defense-in-depth documentation that no cleartext network traffic is permitted,
+    for the day an optional, explicit, user-initiated cloud-sync feature is added.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>
