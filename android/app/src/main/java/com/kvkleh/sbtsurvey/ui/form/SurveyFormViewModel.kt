@@ -73,7 +73,8 @@ class SurveyFormViewModel : ViewModel() {
                 // takes the first good fix automatically.
                 gpsLocked = survey?.hasLocation == true
             )
-            startLocationUpdates()
+            // The receiver is only started by the screen that shows coordinates,
+            // so the surveyor step does not hold the GPS open.
         }
         viewModelScope.launch {
             repository.observeKnownVillages().collect { villages ->
@@ -129,11 +130,6 @@ class SurveyFormViewModel : ViewModel() {
         edit { it.copy(tssBrix = Formats.parseNumber(text)) }
     }
 
-    fun onPhotoCaptured(absolutePath: String, fileName: String) {
-        edit { it.copy(photoPath = absolutePath, photoFileName = fileName) }
-        flushNow()
-    }
-
     private fun refreshPhotoFromDatabase() {
         viewModelScope.launch {
             val stored = repository.getById(loadedId) ?: return@launch
@@ -153,12 +149,11 @@ class SurveyFormViewModel : ViewModel() {
 
     fun clearPhoto() {
         val survey = _uiState.value.survey ?: return
-        viewModelScope.launch {
-            repository.clearPhoto(survey.id)
-            _uiState.value = _uiState.value.copy(
-                survey = _uiState.value.survey?.copy(photoPath = null, photoFileName = null)
-            )
-        }
+        edit { it.copy(photoPath = null, photoFileName = null) }
+        // Write the cleared record before the file goes, so an interrupted removal
+        // leaves a record without a photo rather than a record pointing at nothing.
+        flushNow()
+        Graph.appScope.launch { repository.deletePhotoFile(survey.surveyId) }
     }
 
     // --- auto-save -------------------------------------------------------

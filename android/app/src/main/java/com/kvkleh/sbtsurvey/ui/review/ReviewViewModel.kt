@@ -28,17 +28,24 @@ class ReviewViewModel : ViewModel() {
 
     private var rowId: Long = 0L
 
+    /**
+     * Observes the record rather than reading it once: the form's final auto-save
+     * may still be in flight when this screen opens, and the review must show what
+     * is actually on disk.
+     */
     fun load(id: Long) {
+        if (rowId == id && !_uiState.value.loading) return
         rowId = id
         viewModelScope.launch {
-            val survey = repository.getById(id)
-            val validation = survey?.let { SurveyValidator.validate(it) }
-            _uiState.value = ReviewUiState(
-                loading = false,
-                survey = survey,
-                warnings = validation?.warnings.orEmpty(),
-                errors = validation?.errors.orEmpty()
-            )
+            repository.observeById(id).collect { survey ->
+                val validation = survey?.let { SurveyValidator.validate(it) }
+                _uiState.value = _uiState.value.copy(
+                    loading = false,
+                    survey = survey,
+                    warnings = validation?.warnings.orEmpty(),
+                    errors = validation?.errors.orEmpty()
+                )
+            }
         }
     }
 

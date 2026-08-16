@@ -18,9 +18,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -221,6 +223,7 @@ fun CameraCaptureScreen(
                 .fillMaxWidth()
                 .align(Alignment.TopStart)
                 .background(Color.Black.copy(alpha = 0.45f))
+                .statusBarsPadding()
                 .padding(12.dp)
         ) {
             Box(modifier = Modifier.fillMaxWidth()) {
@@ -296,6 +299,7 @@ fun CameraCaptureScreen(
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .background(Color.Black.copy(alpha = 0.55f))
+                .navigationBarsPadding()
                 .padding(vertical = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center

@@ -104,10 +104,13 @@ class SurveyRepository(
         )
     }
 
-    suspend fun clearPhoto(id: Long) {
-        val survey = dao.getById(id) ?: return
-        photoStore.delete(survey.surveyId)
-        dao.update(survey.copy(photoPath = null, photoFileName = null, updatedAt = System.currentTimeMillis()))
+    /**
+     * Removes the image file for a record. The row itself is updated by the caller
+     * in the same breath, so a pending auto-save can never re-attach a file that
+     * has just been deleted.
+     */
+    fun deletePhotoFile(surveyId: String) {
+        photoStore.delete(surveyId)
     }
 
     /** Deletes a record and its photo. Only ever called behind a confirmation dialog. */
