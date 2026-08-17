@@ -18,6 +18,7 @@ import com.kvkleh.sbtsurvey.ui.list.SavedSurveysScreen
 import com.kvkleh.sbtsurvey.ui.map.SurveyMapScreen
 import com.kvkleh.sbtsurvey.ui.review.ReviewScreen
 import com.kvkleh.sbtsurvey.ui.review.SavedConfirmationScreen
+import com.kvkleh.sbtsurvey.ui.share.ShareDataScreen
 
 /**
  * Welcome → Surveyor → Form → Review → Saved, plus the three menu destinations.
@@ -35,6 +36,7 @@ object Routes {
     const val LIST = "surveys"
     const val MAP = "map"
     const val EXPORT = "export"
+    const val SHARE = "share"
     const val ABOUT = "about"
 
     const val ARG_ROW_ID = "rowId"
@@ -62,6 +64,7 @@ fun SbtNavHost(navController: NavHostController = rememberNavController()) {
                 onOpenSavedSurveys = { navController.navigate(Routes.LIST) },
                 onOpenMap = { navController.navigate(Routes.MAP) },
                 onOpenExport = { navController.navigate(Routes.EXPORT) },
+                onOpenShare = { navController.navigate(Routes.SHARE) },
                 onOpenAbout = { navController.navigate(Routes.ABOUT) }
             )
         }
@@ -156,6 +159,10 @@ fun SbtNavHost(navController: NavHostController = rememberNavController()) {
 
         composable(Routes.EXPORT) {
             ExportScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(Routes.SHARE) {
+            ShareDataScreen(onBack = { navController.popBackStack() })
         }
 
         composable(Routes.ABOUT) {

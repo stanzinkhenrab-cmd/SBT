@@ -38,6 +38,7 @@ class ExportFormatTest {
         plantHeightUnit = SurveyEntity.UNIT_METRE,
         maturityStage = "Ripe",
         harvestDate = 1_767_225_000_000L,
+        fruitShape = "Oval",
         berryDiameterMm = 6.4,
         tssBrix = 11.2,
         easeOfHarvest = "Medium"
@@ -55,8 +56,8 @@ class ExportFormatTest {
             "Survey ID", "Surveyor Name", "Designation", "Organization", "Date", "Time",
             "District", "Block", "Village", "Site", "Photo Filename", "Latitude",
             "Longitude", "Altitude (m)", "Shrub Type", "Plant Height", "Plant Height Unit",
-            "Dominant Fruit Maturity Stage", "Harvest Date", "Berry Diameter (mm)",
-            "TSS (°Brix)", "Ease of Harvest"
+            "Dominant Fruit Maturity Stage", "Harvest Date", "Fruit Shape",
+            "Berry Diameter (mm)", "TSS (°Brix)", "Ease of Harvest"
         )
         required.forEach { column ->
             assertTrue("missing column: $column", SurveyExportRow.headers.contains(column))
@@ -129,6 +130,36 @@ class ExportFormatTest {
         assertTrue(sheet.contains("TSS (°Brix)"))
         // Latitude is column L (index 11) and must be a bare numeric cell.
         assertTrue(sheet.contains("<c r=\"L2\"><v>34.152600</v></c>"))
+    }
+
+    @Test
+    fun `fruit shape travels with the berry columns`() {
+        val values = SurveyExportRow.values(sampleSurvey())
+        val index = SurveyExportRow.headers.indexOf("Fruit Shape")
+        assertTrue(index > SurveyExportRow.headers.indexOf("Harvest Date"))
+        assertTrue(index < SurveyExportRow.headers.indexOf("Berry Diameter (mm)"))
+        assertEquals("Oval", values[index])
+        // A shape is text, so it must not be written as a number.
+        assertTrue(index !in SurveyExportRow.numericColumns)
+    }
+
+    @Test
+    fun `numeric columns still line up with the values that are numbers`() {
+        val values = SurveyExportRow.values(sampleSurvey())
+        SurveyExportRow.numericColumns.forEach { index ->
+            val value = values[index]
+            assertTrue(
+                "column ${SurveyExportRow.headers[index]} = '$value' is not numeric",
+                value.isEmpty() || value.toDoubleOrNull() != null
+            )
+        }
+        listOf("Latitude", "Longitude", "Altitude (m)", "Plant Height",
+               "Berry Diameter (mm)", "TSS (°Brix)").forEach { column ->
+            assertTrue(
+                "$column should be a numeric column",
+                SurveyExportRow.headers.indexOf(column) in SurveyExportRow.numericColumns
+            )
+        }
     }
 
     @Test

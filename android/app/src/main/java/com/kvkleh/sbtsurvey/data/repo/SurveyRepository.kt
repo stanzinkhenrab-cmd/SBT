@@ -2,6 +2,7 @@ package com.kvkleh.sbtsurvey.data.repo
 
 import com.kvkleh.sbtsurvey.data.db.SurveyDao
 import com.kvkleh.sbtsurvey.data.db.SurveyEntity
+import com.kvkleh.sbtsurvey.data.photo.GalleryExporter
 import com.kvkleh.sbtsurvey.data.photo.PhotoStore
 import com.kvkleh.sbtsurvey.data.prefs.LastLocation
 import com.kvkleh.sbtsurvey.data.prefs.SurveyPreferences
@@ -18,8 +19,12 @@ import kotlinx.coroutines.flow.Flow
 class SurveyRepository(
     private val dao: SurveyDao,
     private val photoStore: PhotoStore,
-    private val preferences: SurveyPreferences
+    private val preferences: SurveyPreferences,
+    private val galleryExporter: GalleryExporter
 ) {
+
+    /** Where published photographs land, shown on the confirmation screen. */
+    val galleryFolderLabel: String get() = galleryExporter.galleryFolderLabel
 
     fun observeSaved(): Flow<List<SurveyEntity>> = dao.observeSaved()
 
@@ -74,6 +79,13 @@ class SurveyRepository(
             savedAt = survey.savedAt ?: now
         )
         dao.update(committed)
+
+        // Publish the photograph to the device gallery so the surveyor can see,
+        // back up and share it like any other picture. Best effort: the record is
+        // already saved and must not depend on this.
+        if (!committed.photoFileName.isNullOrBlank()) {
+            galleryExporter.publish(committed.surveyId, photoStore.fileFor(committed.surveyId))
+        }
         preferences.saveProfile(
             SurveyorProfile(
                 name = committed.surveyorName,

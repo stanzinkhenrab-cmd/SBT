@@ -36,6 +36,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.kvkleh.sbtsurvey.Graph
 import com.kvkleh.sbtsurvey.data.Formats
 import com.kvkleh.sbtsurvey.ui.home.HomeViewModel
 
@@ -119,6 +120,12 @@ fun SavedConfirmationScreen(
                         text = "Photo: ${survey.photoFileName}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = "Also saved to your gallery, in ${Graph.repository.galleryFolderLabel}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.secondary,
+                        textAlign = TextAlign.Center
                     )
                 }
                 if (survey.hasLocation) {

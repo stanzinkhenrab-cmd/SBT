@@ -10,9 +10,12 @@ import android.location.LocationManager
 import android.os.Bundle
 import android.os.Looper
 import androidx.core.content.ContextCompat
+import androidx.core.location.LocationManagerCompat
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
 
 /** A field position, as shown on the form and stored with the record. */
 data class GpsFix(
@@ -23,7 +26,15 @@ data class GpsFix(
     val accuracyM: Double?,
     val capturedAt: Long,
     val provider: String
-)
+) {
+    /**
+     * True when the position came from the network rather than the satellites, or
+     * is too coarse to place a shrub. Worth showing: on a tablet this is often the
+     * only thing available, and the surveyor should know what they recorded.
+     */
+    val isApproximate: Boolean
+        get() = provider == LocationManager.NETWORK_PROVIDER || (accuracyM ?: 0.0) > 100.0
+}
 
 /** What the GPS card shows the surveyor. */
 sealed interface GpsStatus {
@@ -33,8 +44,14 @@ sealed interface GpsStatus {
     /** Location services are switched off on the device. */
     data object ServicesDisabled : GpsStatus
 
+    /**
+     * The device has no satellite receiver at all. Common on Wi-Fi-only tablets,
+     * which is exactly the case this app used to spin on forever.
+     */
+    data object NoReceiver : GpsStatus
+
     /** Listening for a fix. */
-    data object Acquiring : GpsStatus
+    data class Acquiring(val elapsedSeconds: Int = 0) : GpsStatus
 
     /** A fix is available. */
     data class Ready(val fix: GpsFix) : GpsStatus
@@ -47,8 +64,14 @@ sealed interface GpsStatus {
  * Thin wrapper over the platform location APIs.
  *
  * Deliberately uses [LocationManager] rather than Google Play services: survey
- * phones in Ladakh are often without a network and sometimes without up-to-date
- * Play services, and the platform GPS provider works with neither.
+ * devices in Ladakh are often without a network and sometimes without up-to-date
+ * Play services, and the platform providers work with neither.
+ *
+ * Tablets are the awkward case and drive most of the behaviour here. Many are
+ * Wi-Fi-only with no GNSS chip, or ship a receiver that takes minutes for a cold
+ * fix. So the service reports what it actually knows - no receiver, listening for
+ * n seconds, an approximate network position, or nothing after a timeout - rather
+ * than showing "Acquiring GPS" indefinitely with no way to tell the difference.
  */
 class LocationService(context: Context) {
 
@@ -57,20 +80,26 @@ class LocationService(context: Context) {
     private val locationManager: LocationManager?
         get() = ContextCompat.getSystemService(appContext, LocationManager::class.java)
 
-    fun hasPermission(): Boolean =
+    fun hasPermission(): Boolean = hasCoarsePermission() || hasFinePermission()
+
+    fun hasFinePermission(): Boolean =
         ContextCompat.checkSelfPermission(appContext, Manifest.permission.ACCESS_FINE_LOCATION) ==
-            PackageManager.PERMISSION_GRANTED ||
-            ContextCompat.checkSelfPermission(
-                appContext,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
+            PackageManager.PERMISSION_GRANTED
+
+    private fun hasCoarsePermission(): Boolean =
+        ContextCompat.checkSelfPermission(appContext, Manifest.permission.ACCESS_COARSE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
+
+    /**
+     * Whether this device has a satellite receiver. A Wi-Fi-only tablet does not,
+     * and can never produce a real fix however long it is left running.
+     */
+    fun hasGpsReceiver(): Boolean =
+        appContext.packageManager.hasSystemFeature(PackageManager.FEATURE_LOCATION_GPS)
 
     fun isLocationEnabled(): Boolean {
         val manager = locationManager ?: return false
-        return runCatching {
-            manager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
-                manager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
-        }.getOrDefault(false)
+        return runCatching { LocationManagerCompat.isLocationEnabled(manager) }.getOrDefault(false)
     }
 
     /**
@@ -86,13 +115,18 @@ class LocationService(context: Context) {
             return@callbackFlow
         }
         val manager = locationManager
-        if (manager == null || !isLocationEnabled()) {
+        if (manager == null) {
+            trySend(GpsStatus.Unavailable)
+            close()
+            return@callbackFlow
+        }
+        if (!isLocationEnabled()) {
             trySend(GpsStatus.ServicesDisabled)
             close()
             return@callbackFlow
         }
 
-        trySend(GpsStatus.Acquiring)
+        trySend(GpsStatus.Acquiring())
 
         var best: Location? = null
 
@@ -114,7 +148,7 @@ class LocationService(context: Context) {
                         altitude = if (location.hasAltitude()) location.altitude else null,
                         accuracyM = if (location.hasAccuracy()) location.accuracy.toDouble() else null,
                         capturedAt = if (location.time > 0) location.time else System.currentTimeMillis(),
-                        provider = location.provider ?: "gps"
+                        provider = location.provider ?: LocationManager.GPS_PROVIDER
                     )
                 )
             )
@@ -131,8 +165,17 @@ class LocationService(context: Context) {
             override fun onProviderDisabled(provider: String) = Unit
         }
 
-        val providers = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER)
-            .filter { runCatching { manager.isProviderEnabled(it) }.getOrDefault(false) }
+        // Every provider the device actually offers, best first. PASSIVE picks up
+        // fixes other apps obtain, which on a tablet is sometimes the only source.
+        val providers = listOf(
+            LocationManager.GPS_PROVIDER,
+            LocationManager.NETWORK_PROVIDER,
+            LocationManager.PASSIVE_PROVIDER
+        ).filter { provider ->
+            runCatching {
+                manager.allProviders.contains(provider) && manager.isProviderEnabled(provider)
+            }.getOrDefault(false)
+        }
 
         // Seed from the last known position so the card is never empty while the
         // receiver warms up; a live fix supersedes it as soon as one arrives.
@@ -143,7 +186,7 @@ class LocationService(context: Context) {
                 ?.let(::offer)
         }
 
-        val registered = providers.any { provider ->
+        val registered = providers.count { provider ->
             runCatching {
                 manager.requestLocationUpdates(
                     provider,
@@ -156,7 +199,28 @@ class LocationService(context: Context) {
             }.getOrDefault(false)
         }
 
-        if (!registered) trySend(GpsStatus.Unavailable)
+        if (registered == 0) {
+            trySend(if (hasGpsReceiver()) GpsStatus.Unavailable else GpsStatus.NoReceiver)
+        } else {
+            // Report how long the search has been running, and give up saying so
+            // rather than leaving "Acquiring" on screen forever. Listening
+            // continues: a fix that arrives late is still recorded.
+            launch {
+                var elapsed = 0
+                while (true) {
+                    delay(TICK_MS)
+                    elapsed += (TICK_MS / 1000).toInt()
+                    if (best != null) return@launch
+                    if (elapsed >= ACQUIRE_TIMEOUT_SECONDS) {
+                        trySend(
+                            if (hasGpsReceiver()) GpsStatus.Unavailable else GpsStatus.NoReceiver
+                        )
+                        return@launch
+                    }
+                    trySend(GpsStatus.Acquiring(elapsed))
+                }
+            }
+        }
 
         awaitClose {
             runCatching { manager.removeUpdates(listener) }
@@ -167,6 +231,17 @@ class LocationService(context: Context) {
         const val MIN_INTERVAL_MS = 1_000L
         const val MIN_DISTANCE_M = 0f
         const val STALE_AFTER_MS = 20_000L
-        const val LAST_KNOWN_MAX_AGE_MS = 10 * 60 * 1000L
+
+        /**
+         * A tablet that has been indoors may hold a fix from some time ago. Showing
+         * it - clearly, with its timestamp - beats showing nothing, and the surveyor
+         * can always tap Update Location once outside.
+         */
+        const val LAST_KNOWN_MAX_AGE_MS = 60 * 60 * 1000L
+
+        const val TICK_MS = 5_000L
+
+        /** A cold GNSS fix can take a minute; beyond that, say so. */
+        const val ACQUIRE_TIMEOUT_SECONDS = 75
     }
 }

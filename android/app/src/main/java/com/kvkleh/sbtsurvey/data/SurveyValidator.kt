@@ -14,6 +14,7 @@ object SurveyField {
     const val MATURITY_STAGE = "maturityStage"
     const val BERRY_DIAMETER = "berryDiameter"
     const val TSS = "tss"
+    const val FRUIT_SHAPE = "fruitShape"
 }
 
 /**
@@ -113,6 +114,7 @@ object SurveyValidator {
         if (survey.harvestDate == null) warnings += "Harvest date was not entered"
         if (survey.berryDiameterMm == null) warnings += "Berry diameter was not measured"
         if (survey.tssBrix == null) warnings += "TSS (°Brix) was not measured"
+        if (survey.fruitShape.isNullOrBlank()) warnings += "Fruit shape was not selected"
         if (survey.easeOfHarvest.isNullOrBlank()) warnings += "Ease of harvest was not selected"
         if (survey.block.isBlank()) warnings += "Block was not entered"
         if (survey.site.isBlank()) warnings += "Site was not entered"

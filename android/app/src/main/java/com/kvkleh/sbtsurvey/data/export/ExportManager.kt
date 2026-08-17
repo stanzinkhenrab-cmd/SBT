@@ -8,8 +8,11 @@ import com.kvkleh.sbtsurvey.data.Formats
 import com.kvkleh.sbtsurvey.data.db.SurveyEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.kvkleh.sbtsurvey.data.photo.PhotoStore
 import java.io.File
 import java.io.OutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 enum class ExportFormat(
     val label: String,
@@ -52,7 +55,8 @@ data class ExportResult(
  */
 class ExportManager(
     context: Context,
-    private val appVersion: String
+    private val appVersion: String,
+    private val photoStore: PhotoStore
 ) {
 
     private val appContext = context.applicationContext
@@ -94,6 +98,58 @@ class ExportManager(
         }
     }
 
+    /**
+     * Bundles the dataset and every photograph into one ZIP, so a whole survey
+     * round can go out through WhatsApp or e-mail as a single attachment with the
+     * images still matched to their rows by file name.
+     */
+    suspend fun writeBundleToCache(
+        surveys: List<SurveyEntity>,
+        format: ExportFormat
+    ): ExportResult = withContext(Dispatchers.IO) {
+        val stamp = Formats.fileStamp(System.currentTimeMillis())
+        val name = "SBT-Survey-$stamp.zip"
+        val file = File(exportDir, name)
+        var photoCount = 0
+
+        ZipOutputStream(file.outputStream().buffered()).use { zip ->
+            zip.putNextEntry(ZipEntry("SBT-Survey-$stamp.${format.extension}"))
+            writeInto(surveys, format, zip)
+            zip.closeEntry()
+
+            surveys.forEach { survey ->
+                val photo = photoStore.fileFor(survey.surveyId)
+                if (photo.exists() && photo.length() > 0) {
+                    zip.putNextEntry(ZipEntry("photos/${photo.name}"))
+                    photo.inputStream().use { it.copyTo(zip) }
+                    zip.closeEntry()
+                    photoCount++
+                }
+            }
+
+            zip.putNextEntry(ZipEntry("README.txt"))
+            zip.write(bundleReadme(surveys.size, photoCount, format).toByteArray(Charsets.UTF_8))
+            zip.closeEntry()
+        }
+
+        ExportResult(format, surveys.size, name, file)
+    }
+
+    private fun bundleReadme(records: Int, photos: Int, format: ExportFormat): String =
+        buildString {
+            appendLine("Seabuckthorn Field Survey - Ladakh")
+            appendLine("Krishi Vigyan Kendra - Leh, Ladakh | MIDH-SBM")
+            appendLine()
+            appendLine("Exported: ${Formats.dateTime(System.currentTimeMillis())}")
+            appendLine("App version: $appVersion")
+            appendLine("Records: $records")
+            appendLine("Photographs: $photos")
+            appendLine()
+            appendLine("The data file is SBT-Survey-*.${format.extension}.")
+            appendLine("Photographs are in photos/, named after the Survey ID, so each")
+            appendLine("image matches the Photo Filename column of its row.")
+        }
+
     fun shareIntent(file: File, format: ExportFormat): Intent {
         val uri = FileProvider.getUriForFile(
             appContext,
@@ -101,7 +157,7 @@ class ExportManager(
             file
         )
         return Intent(Intent.ACTION_SEND).apply {
-            type = format.mimeType
+            type = if (file.name.endsWith(".zip")) "application/zip" else format.mimeType
             putExtra(Intent.EXTRA_STREAM, uri)
             putExtra(Intent.EXTRA_SUBJECT, "Seabuckthorn Field Survey – Ladakh (${file.name})")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)

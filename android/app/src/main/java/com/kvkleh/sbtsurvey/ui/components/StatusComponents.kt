@@ -70,17 +70,28 @@ fun AutoSaveIndicator(state: AutoSaveState, modifier: Modifier = Modifier) {
 fun GpsStatusPill(status: GpsStatus, modifier: Modifier = Modifier) {
     val (label, icon, container, content) = when (status) {
         is GpsStatus.Ready -> StatusStyle(
-            "GPS Ready",
+            if (status.fix.isApproximate) "Approximate fix" else "GPS Ready",
             Icons.Filled.GpsFixed,
             MaterialTheme.colorScheme.secondaryContainer,
             MaterialTheme.colorScheme.onSecondaryContainer
         )
 
-        GpsStatus.Acquiring -> StatusStyle(
-            "Acquiring GPS…",
+        is GpsStatus.Acquiring -> StatusStyle(
+            if (status.elapsedSeconds >= 5) {
+                "Acquiring GPS ${status.elapsedSeconds}s"
+            } else {
+                "Acquiring GPS…"
+            },
             Icons.Filled.GpsNotFixed,
             MaterialTheme.colorScheme.tertiaryContainer,
             MaterialTheme.colorScheme.onTertiaryContainer
+        )
+
+        GpsStatus.NoReceiver -> StatusStyle(
+            "No GPS receiver",
+            Icons.Filled.GpsOff,
+            MaterialTheme.colorScheme.errorContainer,
+            MaterialTheme.colorScheme.onErrorContainer
         )
 
         GpsStatus.PermissionRequired -> StatusStyle(
@@ -110,7 +121,7 @@ fun GpsStatusPill(status: GpsStatus, modifier: Modifier = Modifier) {
         icon = icon,
         contentColor = content,
         containerColor = container,
-        showSpinner = status == GpsStatus.Acquiring,
+        showSpinner = status is GpsStatus.Acquiring,
         modifier = modifier
     )
 }

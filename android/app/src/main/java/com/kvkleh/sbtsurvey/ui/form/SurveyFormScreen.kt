@@ -207,7 +207,19 @@ fun SurveyFormScreen(
                 )
             }
 
-            SectionCard(number = 9, title = "Ease of Harvest") {
+            SectionCard(
+                number = 9,
+                title = "Fruit Shape Type",
+                subtitle = "Dominant berry shape on this shrub"
+            ) {
+                SbtRadioGroup(
+                    options = SurveyOptions.fruitShapes,
+                    selected = survey.fruitShape,
+                    onSelected = viewModel::setFruitShape
+                )
+            }
+
+            SectionCard(number = 10, title = "Ease of Harvest") {
                 SbtRadioGroup(
                     options = SurveyOptions.easeOfHarvest,
                     selected = survey.easeOfHarvest,
@@ -477,16 +489,40 @@ private fun GpsSection(
             )
 
             GpsStatus.Unavailable -> Text(
-                text = "No position yet. Move to open sky and tap Update Location. " +
-                    "Coordinates can also be added later from the saved record.",
+                text = "No position after searching. Move to open sky, away from " +
+                    "buildings, and tap Update Location. Coordinates can also be added " +
+                    "later from the saved record.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error
             )
 
-            GpsStatus.Acquiring -> Text(
-                text = "Searching for satellites…",
+            GpsStatus.NoReceiver -> Text(
+                text = "This device has no satellite receiver — common on Wi-Fi-only " +
+                    "tablets. Record the survey on a phone if coordinates are needed, " +
+                    "or enter them later from the saved record.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
+            )
+
+            is GpsStatus.Acquiring -> Text(
+                text = if (status.elapsedSeconds < 5) {
+                    "Searching for satellites…"
+                } else {
+                    "Searching for satellites… ${status.elapsedSeconds}s. A cold start " +
+                        "outdoors usually takes 30–60 seconds."
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        if (survey.hasLocation && (survey.accuracyM ?: 0.0) > 100.0) {
+            Text(
+                text = "This position is approximate (± ${Formats.metres(survey.accuracyM)} m), " +
+                    "probably from the network rather than satellites. Tap Update Location " +
+                    "outdoors for a precise reading.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error
             )
         }
 

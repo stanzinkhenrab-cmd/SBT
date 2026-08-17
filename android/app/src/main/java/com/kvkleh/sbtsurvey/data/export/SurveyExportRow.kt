@@ -31,6 +31,7 @@ object SurveyExportRow {
         "Plant Height Unit",
         "Dominant Fruit Maturity Stage",
         "Harvest Date",
+        "Fruit Shape",
         "Berry Diameter (mm)",
         "TSS (°Brix)",
         "Ease of Harvest",
@@ -59,6 +60,7 @@ object SurveyExportRow {
         "plant_height_unit",
         "dominant_fruit_maturity_stage",
         "harvest_date",
+        "fruit_shape",
         "berry_diameter_mm",
         "tss_brix",
         "ease_of_harvest",
@@ -69,7 +71,7 @@ object SurveyExportRow {
      * Column indices that hold numbers. Excel writes these as numeric cells so the
      * dataset can be charted or averaged without retyping.
      */
-    val numericColumns: Set<Int> = setOf(11, 12, 13, 14, 16, 20, 21)
+    val numericColumns: Set<Int> = setOf(11, 12, 13, 14, 16, 21, 22)
 
     fun values(survey: SurveyEntity): List<String> = listOf(
         survey.surveyId,
@@ -92,6 +94,7 @@ object SurveyExportRow {
         if (survey.plantHeight == null) "" else survey.plantHeightUnit,
         survey.maturityStage.orEmpty(),
         Formats.date(survey.harvestDate),
+        survey.fruitShape.orEmpty(),
         Formats.number(survey.berryDiameterMm),
         Formats.number(survey.tssBrix),
         survey.easeOfHarvest.orEmpty(),

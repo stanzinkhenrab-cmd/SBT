@@ -21,8 +21,13 @@ Welcome → New Survey → Surveyor Information → Survey Form
         → Review & Save → Survey Saved Successfully → New Survey
 ```
 
-The three-dot menu on the welcome screen holds exactly three items: **Survey
-Map**, **Export Data**, **About**.
+The three-dot menu on the welcome screen holds **Survey Map**, **Export Data**,
+**Share Data** and **About**.
+
+**Share Data** builds the file and hands it to the Android chooser, so it can go
+out through WhatsApp, Gmail, Telegram, Drive, Bluetooth — whatever is installed.
+Sending "Data + photos" produces a single ZIP holding the data file, every
+photograph named after its Survey ID, and a README describing the contents.
 
 ## Data safety
 
@@ -35,6 +40,9 @@ about how records are protected:
 | Phone restarts | Everything is in a Room/SQLite database in app storage. On restart the welcome screen offers to continue the unfinished draft. |
 | Duplicate Survey IDs | Allocation and insertion happen in one database transaction, guarded by a unique index. If a restored database already holds an identifier, the allocator skips past it. Covered by tests, including a concurrency test. |
 | GPS unavailable | The record saves without coordinates and shows `Location unavailable`; the position can be added later by editing the record. |
+| **Tablet with no GNSS chip** | Wi-Fi-only tablets can never produce a satellite fix. The app detects the missing receiver and says so, instead of showing "Acquiring GPS" forever. |
+| **Slow or failed acquisition** | The status shows the seconds elapsed and gives up after 75 s with an explanation. Listening continues, so a late fix is still recorded. |
+| **Approximate position** | A network-derived or low-accuracy fix is labelled as approximate on the form and in the status pill, so a ±2 km reading is never mistaken for a plot coordinate. |
 | Camera unavailable | The screen falls back to the device camera app. A survey is never blocked by a missing photo. |
 | Interrupted photo capture | The camera writes to `<Survey ID>.pending.jpg` and only renames it to `<Survey ID>.jpg` once the capture completes. |
 | Accidental deletion | Deletion always goes through a confirmation dialog that names the Survey ID. Nothing is ever removed silently. |
@@ -52,7 +60,8 @@ about how records are protected:
 | 6 | Plant Height | Value + unit (metres or feet) |
 | 7 | Dominant Fruit Maturity Stage | Unripe / Intermediate / Ripe / Overripe, plus Harvest Date |
 | 8 | Berry Characteristics | Berry Diameter (mm), TSS (°Brix) |
-| 9 | Ease of Harvest | Easy / Medium / Hard |
+| 9 | Fruit Shape Type | Round / Oval / Oblong / Cylindrical / Conical |
+| 10 | Ease of Harvest | Easy / Medium / Hard |
 
 Surveyor name, designation and organization (default **KVK Leh**, any other
 value can be typed) are entered once and carried into every later survey, as are
@@ -68,12 +77,14 @@ into the share sheet. Columns:
 Survey ID, Surveyor Name, Designation, Organization, Date, Time, District,
 Block, Village, Site, Photo Filename, Latitude, Longitude, Altitude (m),
 GPS Accuracy (m), Shrub Type, Plant Height, Plant Height Unit,
-Dominant Fruit Maturity Stage, Harvest Date, Berry Diameter (mm),
+Dominant Fruit Maturity Stage, Harvest Date, Fruit Shape, Berry Diameter (mm),
 TSS (°Brix), Ease of Harvest, Record Status
 ```
 
 Photo file names always equal the Survey ID, so an exported table and the photo
-folder can be matched by name alone.
+folder can be matched by name alone. Saving a survey also copies its photograph
+into the device gallery under `Pictures/Seabuckthorn Survey/`, where it is visible
+to Gallery and to a phone backup rather than locked inside the app.
 
 The `.xlsx` writer produces the OOXML package directly (a small ZIP of XML
 parts) instead of bundling a desktop spreadsheet library: the export is a few
@@ -150,6 +161,9 @@ APKs on every push, and uploads them as downloadable build artifacts.
   plant data, auto-save, review, save, list, CSV/XLSX export and delete, with the
   exported cells checked against what was entered. A second case covers the
   record with no GPS fix and no photo, which must still save.
+- `SurveyMigrationTest` — a version 1 database, with a record already in it, is
+  migrated to the fruit-shape schema: Room accepts the result, every old value is
+  intact, the new column is empty, and the database still takes new records.
 - `SurveyDaoTest` — identifiers increment, never duplicate, survive concurrent
   starts, skip identifiers already present, and are never reissued after a
   deletion.
@@ -165,6 +179,7 @@ APKs on every push, and uploads them as downloadable build artifacts.
 | `CAMERA` | Photograph the shrub |
 | `ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION` | Record plot coordinates |
 | `INTERNET`, `ACCESS_NETWORK_STATE` | Map tiles only; the survey workflow never uses them |
+| `WRITE_EXTERNAL_STORAGE` (Android 9 and older only) | Copy the saved photograph into the device gallery. From Android 10 this needs no permission. |
 
 All three are optional in practice — the app refuses none of its work when they
 are declined.

@@ -7,6 +7,7 @@ import kotlinx.coroutines.SupervisorJob
 import com.kvkleh.sbtsurvey.data.db.SurveyDatabase
 import com.kvkleh.sbtsurvey.data.export.ExportManager
 import com.kvkleh.sbtsurvey.data.location.LocationService
+import com.kvkleh.sbtsurvey.data.photo.GalleryExporter
 import com.kvkleh.sbtsurvey.data.photo.PhotoStore
 import com.kvkleh.sbtsurvey.data.prefs.SurveyPreferences
 import com.kvkleh.sbtsurvey.data.repo.SurveyRepository
@@ -25,6 +26,9 @@ object Graph {
         private set
 
     lateinit var photoStore: PhotoStore
+        private set
+
+    lateinit var galleryExporter: GalleryExporter
         private set
 
     lateinit var locationService: LocationService
@@ -49,9 +53,15 @@ object Graph {
         val database = SurveyDatabase.get(appContext)
         photoStore = PhotoStore(appContext)
         preferences = SurveyPreferences(appContext)
-        repository = SurveyRepository(database.surveyDao(), photoStore, preferences)
+        galleryExporter = GalleryExporter(appContext)
+        repository = SurveyRepository(
+            dao = database.surveyDao(),
+            photoStore = photoStore,
+            preferences = preferences,
+            galleryExporter = galleryExporter
+        )
         locationService = LocationService(appContext)
-        exportManager = ExportManager(appContext, appVersion)
+        exportManager = ExportManager(appContext, appVersion, photoStore)
     }
 
     private fun readVersionName(context: Context): String = runCatching {

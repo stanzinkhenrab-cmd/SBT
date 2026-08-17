@@ -9,6 +9,7 @@ import com.kvkleh.sbtsurvey.data.db.SurveyEntity
 import com.kvkleh.sbtsurvey.data.export.CsvWriter
 import com.kvkleh.sbtsurvey.data.export.SurveyExportRow
 import com.kvkleh.sbtsurvey.data.export.XlsxWriter
+import com.kvkleh.sbtsurvey.data.photo.GalleryExporter
 import com.kvkleh.sbtsurvey.data.photo.PhotoStore
 import com.kvkleh.sbtsurvey.data.prefs.LastLocation
 import com.kvkleh.sbtsurvey.data.prefs.SurveyPreferences
@@ -56,7 +57,12 @@ class SurveyWorkflowTest {
             .build()
         photoStore = PhotoStore(context)
         preferences = SurveyPreferences(context)
-        repository = SurveyRepository(database.surveyDao(), photoStore, preferences)
+        repository = SurveyRepository(
+            dao = database.surveyDao(),
+            photoStore = photoStore,
+            preferences = preferences,
+            galleryExporter = GalleryExporter(context)
+        )
         photoStore.photoDir.listFiles()?.forEach { it.delete() }
     }
 
@@ -93,6 +99,7 @@ class SurveyWorkflowTest {
             harvestDate = System.currentTimeMillis(),
             berryDiameterMm = 6.4,
             tssBrix = 11.2,
+            fruitShape = "Oval",
             easeOfHarvest = "Medium"
         )
         repository.saveDraft(working)
@@ -150,6 +157,7 @@ class SurveyWorkflowTest {
         assertEquals("Ripe", cell("Dominant Fruit Maturity Stage"))
         assertEquals("6.4", cell("Berry Diameter (mm)"))
         assertEquals("11.2", cell("TSS (°Brix)"))
+        assertEquals("Oval", cell("Fruit Shape"))
         assertEquals("Medium", cell("Ease of Harvest"))
         assertEquals("${saved.surveyId}.jpg", cell("Photo Filename"))
         assertEquals(SurveyExportRow.headers.size, row.size)

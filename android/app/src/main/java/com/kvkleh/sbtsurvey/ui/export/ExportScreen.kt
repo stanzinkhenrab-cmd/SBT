@@ -200,15 +200,24 @@ fun ExportScreen(
                     Text("Photographs", style = MaterialTheme.typography.titleSmall)
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        text = "Each photo is stored on this device as <Survey ID>.jpg, so a " +
-                            "row in the exported table always matches its image by name.",
+                        text = "Each photo is stored as <Survey ID>.jpg, so a row in the " +
+                            "exported table always matches its image by name.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        text = state.photoFolder,
-                        style = MaterialTheme.typography.labelSmall,
+                        text = "When a survey is saved its photo is also copied to your " +
+                            "gallery, in ${state.galleryFolder}, where you can view, back " +
+                            "up and share it like any other picture.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = "To send the data and every photo together, use Share Data " +
+                            "in the ⋮ menu and choose \"Data + photos\".",
+                        style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }

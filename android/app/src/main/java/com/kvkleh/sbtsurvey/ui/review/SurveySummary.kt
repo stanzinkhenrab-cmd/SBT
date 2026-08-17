@@ -113,6 +113,7 @@ fun SurveySummary(survey: SurveyEntity, modifier: Modifier = Modifier) {
             icon = Icons.Filled.Science,
             title = "Berries and harvest"
         ) {
+            DetailRow("Fruit Shape", survey.fruitShape.orEmpty())
             DetailRow(
                 "Berry Diameter",
                 survey.berryDiameterMm?.let { "${Formats.number(it)} mm" }.orEmpty()

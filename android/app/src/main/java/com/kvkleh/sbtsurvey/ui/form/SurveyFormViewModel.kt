@@ -108,6 +108,7 @@ class SurveyFormViewModel : ViewModel() {
     fun setSite(value: String) = edit { it.copy(site = value) }
     fun setShrubType(value: String) = edit { it.copy(shrubType = value) }
     fun setMaturityStage(value: String) = edit { it.copy(maturityStage = value) }
+    fun setFruitShape(value: String) = edit { it.copy(fruitShape = value) }
     fun setEaseOfHarvest(value: String) = edit { it.copy(easeOfHarvest = value) }
     fun setHarvestDate(millis: Long?) = edit {
         it.copy(harvestDate = millis?.let(Formats::startOfDay))

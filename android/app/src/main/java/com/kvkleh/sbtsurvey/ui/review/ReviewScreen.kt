@@ -1,5 +1,7 @@
 package com.kvkleh.sbtsurvey.ui.review
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,10 +34,15 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.ContextCompat
 import com.kvkleh.sbtsurvey.ui.components.FormColumn
 
 /**
@@ -54,6 +61,14 @@ fun ReviewScreen(
     LaunchedEffect(surveyRowId) { viewModel.load(surveyRowId) }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val survey = state.survey
+    val context = LocalContext.current
+    val storagePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {
+        // Granted or not, the survey is saved either way; only the gallery copy
+        // depends on the answer.
+        viewModel.save { saved -> onSaved(saved.id) }
+    }
 
     Scaffold(
         topBar = {
@@ -123,7 +138,17 @@ fun ReviewScreen(
             }
 
             Button(
-                onClick = { viewModel.save { saved -> onSaved(saved.id) } },
+                onClick = {
+                    // Android 9 and older need permission before a photo can be
+                    // copied into the gallery. The answer never blocks the save.
+                    if (needsLegacyStoragePermission(context)) {
+                        storagePermissionLauncher.launch(
+                            android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+                        )
+                    } else {
+                        viewModel.save { saved -> onSaved(saved.id) }
+                    }
+                },
                 enabled = !state.saving,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -160,3 +185,16 @@ fun ReviewScreen(
         }
     }
 }
+
+
+/**
+ * True when this Android version writes to the public Pictures folder directly and
+ * the permission for that has not been granted yet. From Android 10 the app writes
+ * its own media through MediaStore and needs no permission at all.
+ */
+private fun needsLegacyStoragePermission(context: Context): Boolean =
+    Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
+        ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.WRITE_EXTERNAL_STORAGE
+        ) != PackageManager.PERMISSION_GRANTED

@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
@@ -73,6 +74,7 @@ fun WelcomeScreen(
     onOpenSavedSurveys: () -> Unit,
     onOpenMap: () -> Unit,
     onOpenExport: () -> Unit,
+    onOpenShare: () -> Unit,
     onOpenAbout: () -> Unit,
     viewModel: HomeViewModel = viewModel()
 ) {
@@ -114,6 +116,19 @@ fun WelcomeScreen(
                             onClick = {
                                 menuOpen = false
                                 onOpenExport()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Share Data") },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.Send,
+                                    contentDescription = null
+                                )
+                            },
+                            onClick = {
+                                menuOpen = false
+                                onOpenShare()
                             }
                         )
                         DropdownMenuItem(

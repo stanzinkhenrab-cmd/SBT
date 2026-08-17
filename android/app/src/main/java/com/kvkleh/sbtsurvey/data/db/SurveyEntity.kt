@@ -71,7 +71,10 @@ data class SurveyEntity(
     val berryDiameterMm: Double? = null,
     val tssBrix: Double? = null,
 
-    // 9. Ease of harvest ----------------------------------------------------
+    // 9. Fruit shape --------------------------------------------------------
+    val fruitShape: String? = null,
+
+    // 10. Ease of harvest ---------------------------------------------------
     val easeOfHarvest: String? = null
 ) {
     val isDraft: Boolean get() = status == STATUS_DRAFT

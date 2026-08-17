@@ -57,6 +57,13 @@ object SurveyOptions {
 
     val maturityStages = listOf("Unripe", "Intermediate", "Ripe", "Overripe")
 
+    /**
+     * Berry shape descriptors used for Hippophae rhamnoides. Kept to the five
+     * that field staff can separate reliably by eye; edit this list to match the
+     * descriptor set your programme reports against.
+     */
+    val fruitShapes = listOf("Round", "Oval", "Oblong", "Cylindrical", "Conical")
+
     val easeOfHarvest = listOf("Easy", "Medium", "Hard")
 
     val heightUnits = listOf(SurveyEntity.UNIT_METRE, SurveyEntity.UNIT_FEET)
