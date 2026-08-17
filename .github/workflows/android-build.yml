@@ -38,7 +38,21 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Unit tests
-        run: ./gradlew testDebugUnitTest --stacktrace
+        run: |
+          set -o pipefail
+          if ! ./gradlew testDebugUnitTest > test.log 2>&1; then
+            echo "::group::Kotlin compiler errors"
+            grep -E "^e: |^w: .*error" test.log || echo "(no compiler errors — see the tail below)"
+            echo "::endgroup::"
+            echo "::group::Failing tests"
+            grep -E "FAILED|expected:|actual:|AssertionError|Caused by:" test.log | head -n 60 || true
+            echo "::endgroup::"
+            echo "::group::Output tail"
+            tail -n 80 test.log
+            echo "::endgroup::"
+            exit 1
+          fi
+          grep -E "tests completed|BUILD SUCCESSFUL" test.log | tail -n 5
 
       - name: Lint
         run: ./gradlew lintDebug --stacktrace
