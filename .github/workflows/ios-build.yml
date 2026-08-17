@@ -65,13 +65,31 @@ jobs:
       - name: Build and run unit tests
         run: |
           set -o pipefail
-          xcodebuild test \
+          if ! xcodebuild test \
             -project SeabuckthornSurvey.xcodeproj \
             -scheme SeabuckthornSurvey \
             -destination "id=${{ steps.simulator.outputs.udid }}" \
             -resultBundlePath TestResults.xcresult \
-            CODE_SIGNING_ALLOWED=NO \
-            | tail -n 120
+            CODE_SIGNING_ALLOWED=NO > test.log 2>&1
+          then
+            echo "::group::Failing build output"
+            tail -n 200 test.log
+            echo "::endgroup::"
+            grep -E "error:|failed|XCTAssert" test.log | tail -n 40 || true
+            exit 1
+          fi
+
+          echo "### iOS test results" >> "$GITHUB_STEP_SUMMARY"
+          grep -E "^Test Suite '.*' (passed|failed)|Executed [0-9]+ test" test.log \
+            | tail -n 30 | tee -a "$GITHUB_STEP_SUMMARY"
+
+          # A green run that executed nothing is not a green run.
+          EXECUTED=$(grep -oE "Executed [0-9]+ test" test.log | head -1 | grep -oE "[0-9]+" || echo 0)
+          echo "Tests executed: $EXECUTED"
+          if [ "$EXECUTED" -lt 1 ]; then
+            echo "::error::xcodebuild reported success but ran no tests."
+            exit 1
+          fi
 
       - name: Build for a device (unsigned)
         run: |
