@@ -24,7 +24,7 @@ data class SurveyFormUiState(
     val berryDiameterText: String = "",
     val tssText: String = "",
     val autoSave: AutoSaveState = AutoSaveState.Idle,
-    val gpsStatus: GpsStatus = GpsStatus.Acquiring,
+    val gpsStatus: GpsStatus = GpsStatus.Acquiring(),
     val gpsLocked: Boolean = false,
     val knownVillages: List<String> = emptyList(),
     val errors: Map<String, String> = emptyMap(),
