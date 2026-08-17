@@ -1,0 +1,550 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		25EB5D3A702E3076795AA346 = {isa = PBXBuildFile; fileRef = FC9BBDE51A47CE9B073F2FF4; };
+		5A698080C1589B29500D069A = {isa = PBXBuildFile; fileRef = 137832F20141FF956883C47B; };
+		CFF6196A3FEA419DDE1C6015 = {isa = PBXBuildFile; fileRef = 743553E2B74E58857EA35445; };
+		BF71D454CC9E7D4F9BC707BC = {isa = PBXBuildFile; fileRef = 9C93FA9D4F60225966A65F70; };
+		5D5D1C4017D65274949EF8A9 = {isa = PBXBuildFile; fileRef = 0AC130D3A774CBDAE6A6A5B9; };
+		654A24AB971CDF89314EFAA9 = {isa = PBXBuildFile; fileRef = 9C8DEC2ABDE253A068E2DDC4; };
+		3CE8E7F816549EB077AF83BB = {isa = PBXBuildFile; fileRef = 318E95D7DD20526DD9877070; };
+		EB31658B03B2494AD4F9F87F = {isa = PBXBuildFile; fileRef = B15EE3555ACA54D678068E76; };
+		904C640CD06CEBD3CB4414BD = {isa = PBXBuildFile; fileRef = B7BD220D59D076D43BF498D8; };
+		A031B32C58E420517D77D3FF = {isa = PBXBuildFile; fileRef = B0522B594AECD07433096D8F; };
+		D72F1C857B3AD1EE5F8104AD = {isa = PBXBuildFile; fileRef = E8CE91F9FB7AED30AD332A99; };
+		A93AF375DFDB3E01FE0B252A = {isa = PBXBuildFile; fileRef = 1DDB1700BD7EB76F560FBB22; };
+		542E893ACB2E0F19E3A5F27A = {isa = PBXBuildFile; fileRef = 69686E1346C43262A75C4935; };
+		E83B2C0DC609FD92D4EF5C74 = {isa = PBXBuildFile; fileRef = 0DB7582E565195ADD2FBEA4C; };
+		B97CFE6F649200EA140D3C53 = {isa = PBXBuildFile; fileRef = F8B262AD3BAC49D1A63FD67C; };
+		20ECCB51814D5C1A2F558BF3 = {isa = PBXBuildFile; fileRef = B0993B732809445A058C7303; };
+		1D85EF88DB124D9F0F463693 = {isa = PBXBuildFile; fileRef = 4B7EB6C4AC07D4994E1C3125; };
+		4940D9F9A19CC6CA28A8CEAF = {isa = PBXBuildFile; fileRef = 34A215BE61B77CCC2C39B9D6; };
+		8586A1BB4E52EB10FE02EACD = {isa = PBXBuildFile; fileRef = 4DF89BB1922CF88B3413FC74; };
+		04C1B79DD8DE9D968D13B190 = {isa = PBXBuildFile; fileRef = 47ECDE1431C535D19A6C517E; };
+		3B98C9CBA107AC352988B3EF = {isa = PBXBuildFile; fileRef = AB82EC1E9A47889D5A13E33D; };
+		4DD919F61B4895CD21160B4B = {isa = PBXBuildFile; fileRef = 088331ADCE013F6F52A8E868; };
+		928E5473481912990782219B = {isa = PBXBuildFile; fileRef = EC9F4668D896358E725340A0; };
+		FCADE188ECB4DEA166903C71 = {isa = PBXBuildFile; fileRef = 2B6BA33399229792B5C3FAC3; };
+		B9F07B0A99F92840E9BD9128 = {isa = PBXBuildFile; fileRef = 49C03866A1DDD1DF5E7E2A11; };
+		CC1031D10CBA0BDFAB41751D = {isa = PBXBuildFile; fileRef = 6A0DD6767A1CAA0965B1BCF2; };
+		52D094B000588DCDF728DA02 = {isa = PBXBuildFile; fileRef = C02DBB515CB6F49D51540141; };
+		DA265B7126CE68A860AB2561 = {isa = PBXBuildFile; fileRef = 6D2B581DC1E322B4C39E160F; };
+		59CAC749A5C92DC693AFC85B = {isa = PBXBuildFile; fileRef = 79AA1EC21CE4ECE5E748C878; };
+		9771738FDA1E0A2F5562C4F2 = {isa = PBXBuildFile; fileRef = 60ABEBACBAD542F403A69D95; };
+		4E10264B7C2A548871F34EF8 = {isa = PBXBuildFile; fileRef = 402832A3F3241CD6CAEA32C3; };
+		A0E26651FAB85D4F7202FB4A = {isa = PBXBuildFile; fileRef = B647E2CDA7C2CFB1B7EBCA83; };
+		5D02FB4AB9BF0EFDCA7FCD2E = {isa = PBXBuildFile; fileRef = 898D768D75162FE2DE6FCF05; };
+		9DEFAF48F94609C97456F722 = {isa = PBXBuildFile; fileRef = CA8667C7B47B43D9EB9823A2; };
+		6D5D31EA9D9F498F6B3E64A9 = {isa = PBXBuildFile; fileRef = 4324A058D1A65F937CF97BFF; };
+		082647CFAAF7C72AB95DB9E4 = {isa = PBXBuildFile; fileRef = 9C131D9086446991F84064AC; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		FC9BBDE51A47CE9B073F2FF4 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEnvironment.swift; sourceTree = "<group>"; };
+		137832F20141FF956883C47B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeabuckthornSurveyApp.swift; sourceTree = "<group>"; };
+		743553E2B74E58857EA35445 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formats.swift; sourceTree = "<group>"; };
+		9C93FA9D4F60225966A65F70 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationService.swift; sourceTree = "<group>"; };
+		0AC130D3A774CBDAE6A6A5B9 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoStore.swift; sourceTree = "<group>"; };
+		9C8DEC2ABDE253A068E2DDC4 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Survey.swift; sourceTree = "<group>"; };
+		318E95D7DD20526DD9877070 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurveyDatabase.swift; sourceTree = "<group>"; };
+		B15EE3555ACA54D678068E76 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurveyOptions.swift; sourceTree = "<group>"; };
+		B7BD220D59D076D43BF498D8 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurveyPreferences.swift; sourceTree = "<group>"; };
+		B0522B594AECD07433096D8F = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurveyStore.swift; sourceTree = "<group>"; };
+		E8CE91F9FB7AED30AD332A99 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurveyValidator.swift; sourceTree = "<group>"; };
+		1DDB1700BD7EB76F560FBB22 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportManager.swift; sourceTree = "<group>"; };
+		69686E1346C43262A75C4935 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportWriters.swift; sourceTree = "<group>"; };
+		0DB7582E565195ADD2FBEA4C = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurveyExportRow.swift; sourceTree = "<group>"; };
+		F8B262AD3BAC49D1A63FD67C = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XLSXWriter.swift; sourceTree = "<group>"; };
+		B647E2CDA7C2CFB1B7EBCA83 = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B0993B732809445A058C7303 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AboutView.swift; sourceTree = "<group>"; };
+		4B7EB6C4AC07D4994E1C3125 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportView.swift; sourceTree = "<group>"; };
+		34A215BE61B77CCC2C39B9D6 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewView.swift; sourceTree = "<group>"; };
+		4DF89BB1922CF88B3413FC74 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedConfirmationView.swift; sourceTree = "<group>"; };
+		47ECDE1431C535D19A6C517E = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedSurveysView.swift; sourceTree = "<group>"; };
+		AB82EC1E9A47889D5A13E33D = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurveyDetailView.swift; sourceTree = "<group>"; };
+		088331ADCE013F6F52A8E868 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurveyFormModel.swift; sourceTree = "<group>"; };
+		EC9F4668D896358E725340A0 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurveyFormView.swift; sourceTree = "<group>"; };
+		2B6BA33399229792B5C3FAC3 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurveyMapView.swift; sourceTree = "<group>"; };
+		49C03866A1DDD1DF5E7E2A11 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurveySummaryView.swift; sourceTree = "<group>"; };
+		6A0DD6767A1CAA0965B1BCF2 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurveyorView.swift; sourceTree = "<group>"; };
+		C02DBB515CB6F49D51540141 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		6D2B581DC1E322B4C39E160F = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WelcomeView.swift; sourceTree = "<group>"; };
+		79AA1EC21CE4ECE5E748C878 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPicker.swift; sourceTree = "<group>"; };
+		60ABEBACBAD542F403A69D95 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FormComponents.swift; sourceTree = "<group>"; };
+		402832A3F3241CD6CAEA32C3 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusComponents.swift; sourceTree = "<group>"; };
+		898D768D75162FE2DE6FCF05 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportFormatTests.swift; sourceTree = "<group>"; };
+		CA8667C7B47B43D9EB9823A2 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurveyDatabaseTests.swift; sourceTree = "<group>"; };
+		4324A058D1A65F937CF97BFF = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurveyValidatorTests.swift; sourceTree = "<group>"; };
+		9C131D9086446991F84064AC = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SurveyWorkflowTests.swift; sourceTree = "<group>"; };
+		1E00F2EE49577185D1041EEF = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SeabuckthornSurvey.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		745D957B7793330E5D19664E = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SeabuckthornSurveyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		0DC4364723F9559A20767A4E = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D24772CCEAD10939B1446727 = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		78A5B6477EB011B4FC207337 = {
+			isa = PBXGroup;
+			children = (
+				FC9BBDE51A47CE9B073F2FF4,
+				137832F20141FF956883C47B,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		71F29F5408E5DE30EA3B12D6 = {
+			isa = PBXGroup;
+			children = (
+				1DDB1700BD7EB76F560FBB22,
+				69686E1346C43262A75C4935,
+				0DB7582E565195ADD2FBEA4C,
+				F8B262AD3BAC49D1A63FD67C,
+			);
+			path = Export;
+			sourceTree = "<group>";
+		};
+		13C55C2D9963BFABEE59904E = {
+			isa = PBXGroup;
+			children = (
+				71F29F5408E5DE30EA3B12D6,
+				743553E2B74E58857EA35445,
+				9C93FA9D4F60225966A65F70,
+				0AC130D3A774CBDAE6A6A5B9,
+				9C8DEC2ABDE253A068E2DDC4,
+				318E95D7DD20526DD9877070,
+				B15EE3555ACA54D678068E76,
+				B7BD220D59D076D43BF498D8,
+				B0522B594AECD07433096D8F,
+				E8CE91F9FB7AED30AD332A99,
+			);
+			path = Data;
+			sourceTree = "<group>";
+		};
+		C8CE03F13DEF772EB2DB37DA = {
+			isa = PBXGroup;
+			children = (
+				B647E2CDA7C2CFB1B7EBCA83,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		9FD69CC739EF22B23277CA15 = {
+			isa = PBXGroup;
+			children = (
+				79AA1EC21CE4ECE5E748C878,
+				60ABEBACBAD542F403A69D95,
+				402832A3F3241CD6CAEA32C3,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		681D824B547D98E2FCBF578B = {
+			isa = PBXGroup;
+			children = (
+				9FD69CC739EF22B23277CA15,
+				B0993B732809445A058C7303,
+				4B7EB6C4AC07D4994E1C3125,
+				34A215BE61B77CCC2C39B9D6,
+				4DF89BB1922CF88B3413FC74,
+				47ECDE1431C535D19A6C517E,
+				AB82EC1E9A47889D5A13E33D,
+				088331ADCE013F6F52A8E868,
+				EC9F4668D896358E725340A0,
+				2B6BA33399229792B5C3FAC3,
+				49C03866A1DDD1DF5E7E2A11,
+				6A0DD6767A1CAA0965B1BCF2,
+				C02DBB515CB6F49D51540141,
+				6D2B581DC1E322B4C39E160F,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+		3680AF29D3AD7354A33E355C = {
+			isa = PBXGroup;
+			children = (
+				78A5B6477EB011B4FC207337,
+				13C55C2D9963BFABEE59904E,
+				C8CE03F13DEF772EB2DB37DA,
+				681D824B547D98E2FCBF578B,
+			);
+			path = SeabuckthornSurvey;
+			sourceTree = "<group>";
+		};
+		B5230D7974225CBB8C405EAF = {
+			isa = PBXGroup;
+			children = (
+				898D768D75162FE2DE6FCF05,
+				CA8667C7B47B43D9EB9823A2,
+				4324A058D1A65F937CF97BFF,
+				9C131D9086446991F84064AC,
+			);
+			path = SeabuckthornSurveyTests;
+			sourceTree = "<group>";
+		};
+		4DBCBA309B6C2F3D3C148D2D = {
+			isa = PBXGroup;
+			children = (
+				1E00F2EE49577185D1041EEF,
+				745D957B7793330E5D19664E,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		748B651F9CC61D1D6BD106B4 = {
+			isa = PBXGroup;
+			children = (
+				3680AF29D3AD7354A33E355C,
+				B5230D7974225CBB8C405EAF,
+				4DBCBA309B6C2F3D3C148D2D,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		64315EB961DDBC3BAFE2A9C8 = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2D2EBF912C47FE875E0CCEF5;
+			buildPhases = (
+				63C4F28629A021C38C91F8CD,
+				0DC4364723F9559A20767A4E,
+				592EAE9CB74107625532F849,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SeabuckthornSurvey;
+			productName = SeabuckthornSurvey;
+			productReference = 1E00F2EE49577185D1041EEF;
+			productType = "com.apple.product-type.application";
+		};
+		1BEAFD95228EAD539F3F3D1C = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A102E51496E9455F73BE1971;
+			buildPhases = (
+				AC27D2EABD94242A2D6F1455,
+				D24772CCEAD10939B1446727,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				83422FC8BF9A2B0D069202D2,
+			);
+			name = SeabuckthornSurveyTests;
+			productName = SeabuckthornSurveyTests;
+			productReference = 745D957B7793330E5D19664E;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		244210E48437B6556980A702 = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					64315EB961DDBC3BAFE2A9C8 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+					1BEAFD95228EAD539F3F3D1C = {
+						CreatedOnToolsVersion = 15.0;
+						TestTargetID = 64315EB961DDBC3BAFE2A9C8;
+					};
+				};
+			};
+			buildConfigurationList = A15C1660503C9D18B9702A73;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 748B651F9CC61D1D6BD106B4;
+			productRefGroup = 4DBCBA309B6C2F3D3C148D2D;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				64315EB961DDBC3BAFE2A9C8,
+				1BEAFD95228EAD539F3F3D1C,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		592EAE9CB74107625532F849 = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A0E26651FAB85D4F7202FB4A,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		63C4F28629A021C38C91F8CD = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				25EB5D3A702E3076795AA346,
+				5A698080C1589B29500D069A,
+				CFF6196A3FEA419DDE1C6015,
+				BF71D454CC9E7D4F9BC707BC,
+				5D5D1C4017D65274949EF8A9,
+				654A24AB971CDF89314EFAA9,
+				3CE8E7F816549EB077AF83BB,
+				EB31658B03B2494AD4F9F87F,
+				904C640CD06CEBD3CB4414BD,
+				A031B32C58E420517D77D3FF,
+				D72F1C857B3AD1EE5F8104AD,
+				A93AF375DFDB3E01FE0B252A,
+				542E893ACB2E0F19E3A5F27A,
+				E83B2C0DC609FD92D4EF5C74,
+				B97CFE6F649200EA140D3C53,
+				20ECCB51814D5C1A2F558BF3,
+				1D85EF88DB124D9F0F463693,
+				4940D9F9A19CC6CA28A8CEAF,
+				8586A1BB4E52EB10FE02EACD,
+				04C1B79DD8DE9D968D13B190,
+				3B98C9CBA107AC352988B3EF,
+				4DD919F61B4895CD21160B4B,
+				928E5473481912990782219B,
+				FCADE188ECB4DEA166903C71,
+				B9F07B0A99F92840E9BD9128,
+				CC1031D10CBA0BDFAB41751D,
+				52D094B000588DCDF728DA02,
+				DA265B7126CE68A860AB2561,
+				59CAC749A5C92DC693AFC85B,
+				9771738FDA1E0A2F5562C4F2,
+				4E10264B7C2A548871F34EF8,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AC27D2EABD94242A2D6F1455 = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5D02FB4AB9BF0EFDCA7FCD2E,
+				9DEFAF48F94609C97456F722,
+				6D5D31EA9D9F498F6B3E64A9,
+				082647CFAAF7C72AB95DB9E4,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		83422FC8BF9A2B0D069202D2 = {
+			isa = PBXTargetDependency;
+			target = 64315EB961DDBC3BAFE2A9C8;
+			targetProxy = 87A7E8BF941B865966834D68;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXContainerItemProxy section */
+		87A7E8BF941B865966834D68 = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 244210E48437B6556980A702;
+			proxyType = 1;
+			remoteGlobalIDString = 64315EB961DDBC3BAFE2A9C8;
+			remoteInfo = SeabuckthornSurvey;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin XCBuildConfiguration section */
+		1718AAF4E5CB68E01B8646DA = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = "DEBUG=1 $(inherited)";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		33463152ED1CFFD4190C6F38 = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 5.0;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		A667A5DCF00157E154976C42 = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "SBT Survey";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Photographs of seabuckthorn shrubs are attached to survey records and stay on this device.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Survey records store the plot coordinates, altitude and GPS accuracy. Positions stay on this device.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Used only when this device has no camera, so a shrub photograph can still be attached to a survey record.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 1.0.0;
+				OTHER_LDFLAGS = "-lsqlite3";
+				PRODUCT_BUNDLE_IDENTIFIER = com.kvkleh.sbtsurvey;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		E05252BD554B415D661AE24E = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "SBT Survey";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Photographs of seabuckthorn shrubs are attached to survey records and stay on this device.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Survey records store the plot coordinates, altitude and GPS accuracy. Positions stay on this device.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Used only when this device has no camera, so a shrub photograph can still be attached to a survey record.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 1.0.0;
+				OTHER_LDFLAGS = "-lsqlite3";
+				PRODUCT_BUNDLE_IDENTIFIER = com.kvkleh.sbtsurvey;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		0D0EF126391ECA25FCC9F4F8 = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kvkleh.sbtsurvey.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SeabuckthornSurvey.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SeabuckthornSurvey";
+			};
+			name = Debug;
+		};
+		BAE8DEB53CB8214A2FD1F57F = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kvkleh.sbtsurvey.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SeabuckthornSurvey.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SeabuckthornSurvey";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A15C1660503C9D18B9702A73 = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1718AAF4E5CB68E01B8646DA,
+				33463152ED1CFFD4190C6F38,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		2D2EBF912C47FE875E0CCEF5 = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A667A5DCF00157E154976C42,
+				E05252BD554B415D661AE24E,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A102E51496E9455F73BE1971 = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0D0EF126391ECA25FCC9F4F8,
+				BAE8DEB53CB8214A2FD1F57F,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 244210E48437B6556980A702;
+}

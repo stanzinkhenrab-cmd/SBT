@@ -1,0 +1,23 @@
+{
+  "images": [
+    {
+      "filename": "SBTEmblem.png",
+      "idiom": "universal",
+      "scale": "1x"
+    },
+    {
+      "filename": "SBTEmblem@2x.png",
+      "idiom": "universal",
+      "scale": "2x"
+    },
+    {
+      "filename": "SBTEmblem@3x.png",
+      "idiom": "universal",
+      "scale": "3x"
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
+  }
+}
