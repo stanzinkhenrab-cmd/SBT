@@ -23,6 +23,11 @@ jobs:
     name: Build and publish APK
     runs-on: ubuntu-latest
 
+    # Hoisted to the job so the optional-signing steps can test for it: the `secrets`
+    # context is not available in a step-level `if`, but `env` is.
+    env:
+      SBT_KEYSTORE_BASE64: ${{ secrets.SBT_KEYSTORE_BASE64 }}
+
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
@@ -57,9 +62,7 @@ jobs:
       # Android installs just as happily.
       - name: Restore the release keystore
         id: keystore
-        if: ${{ secrets.SBT_KEYSTORE_BASE64 != '' }}
-        env:
-          SBT_KEYSTORE_BASE64: ${{ secrets.SBT_KEYSTORE_BASE64 }}
+        if: ${{ env.SBT_KEYSTORE_BASE64 != '' }}
         run: |
           echo "$SBT_KEYSTORE_BASE64" | base64 --decode > release-keystore.jks
           echo "available=true" >> "$GITHUB_OUTPUT"
