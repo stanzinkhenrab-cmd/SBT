@@ -21,6 +21,8 @@ data class DashboardUiState(
     val lastExport: ExportResult? = null,
     /** Set when the surveyor asked to share; consumed by the screen to open the Sharesheet. */
     val pendingShare: ExportResult? = null,
+    /** Set when the surveyor asked to save; consumed by the screen to open the file picker. */
+    val pendingSave: ExportResult? = null,
     val message: String? = null,
     val pendingDelete: SurveyEntity? = null
 )
@@ -76,7 +78,11 @@ class DashboardViewModel(
         }
     }
 
-    fun export(format: ExportFormat, thenShare: Boolean = false) {
+    /**
+     * Produces the export file, then either hands it to the Sharesheet or to the system
+     * file picker. Both paths generate exactly the same file.
+     */
+    fun export(format: ExportFormat, thenShare: Boolean) {
         if (_uiState.value.exporting) return
         viewModelScope.launch {
             _uiState.update { it.copy(exporting = true) }
@@ -87,11 +93,7 @@ class DashboardViewModel(
                         exporting = false,
                         lastExport = result,
                         pendingShare = if (thenShare) result else null,
-                        message = if (thenShare) {
-                            null
-                        } else {
-                            "Exported ${result.recordCount} surveys to ${result.file.name}"
-                        }
+                        pendingSave = if (thenShare) null else result
                     )
                 }
             } catch (e: Exception) {
@@ -106,6 +108,10 @@ class DashboardViewModel(
     }
 
     fun consumeShare() = _uiState.update { it.copy(pendingShare = null) }
+
+    fun consumeSave() = _uiState.update { it.copy(pendingSave = null) }
+
+    fun report(message: String) = _uiState.update { it.copy(message = message) }
 
     fun consumeMessage() = _uiState.update { it.copy(message = null) }
 }

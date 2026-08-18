@@ -22,7 +22,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -58,11 +57,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kvkleh.sbtsurvey.data.local.SurveyEntity
 import com.kvkleh.sbtsurvey.export.ShareLauncher
 import com.kvkleh.sbtsurvey.ui.components.Fmt
+import com.kvkleh.sbtsurvey.ui.components.rememberFileSaver
 import com.kvkleh.sbtsurvey.ui.dashboardViewModel
 
 /**
  * Home screen: a prominent New Survey action, the list of saved records, and the
- * three-dot menu holding Survey Map / Export Data / Share Data / About.
+ * three-dot menu holding Survey Map / Export Data / About.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,8 +79,14 @@ fun DashboardScreen(
 
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
+    val fileSaver = rememberFileSaver { savedName, error ->
+        when {
+            error != null -> viewModel.report(error)
+            savedName != null -> viewModel.report("Saved $savedName")
+        }
+    }
     var menuOpen by remember { mutableStateOf(false) }
-    var exportSheetMode by remember { mutableStateOf<ExportSheetMode?>(null) }
+    var showExport by remember { mutableStateOf(false) }
 
     LaunchedEffect(uiState.message) {
         uiState.message?.let {
@@ -94,6 +100,13 @@ fun DashboardScreen(
             runCatching { ShareLauncher.share(context, result) }
                 .onFailure { snackbarHostState.showSnackbar("No app available to share this file.") }
             viewModel.consumeShare()
+        }
+    }
+
+    LaunchedEffect(uiState.pendingSave) {
+        uiState.pendingSave?.let { result ->
+            fileSaver.save(result.file)
+            viewModel.consumeSave()
         }
     }
 
@@ -134,15 +147,7 @@ fun DashboardScreen(
                                 leadingIcon = { Icon(Icons.Filled.Upload, contentDescription = null) },
                                 onClick = {
                                     menuOpen = false
-                                    exportSheetMode = ExportSheetMode.EXPORT
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Share Data") },
-                                leadingIcon = { Icon(Icons.Filled.Share, contentDescription = null) },
-                                onClick = {
-                                    menuOpen = false
-                                    exportSheetMode = ExportSheetMode.SHARE
+                                    showExport = true
                                 }
                             )
                             DropdownMenuItem(
@@ -215,15 +220,15 @@ fun DashboardScreen(
         )
     }
 
-    exportSheetMode?.let { mode ->
+    if (showExport) {
         ExportSheet(
-            mode = mode,
             busy = uiState.exporting,
             surveyCount = surveys.size,
-            onDismiss = { exportSheetMode = null },
-            onChoose = { format ->
-                viewModel.export(format, thenShare = mode == ExportSheetMode.SHARE)
-                exportSheetMode = null
+            photoCount = surveys.count { it.photoPath != null },
+            onDismiss = { showExport = false },
+            onChoose = { format, share ->
+                viewModel.export(format, thenShare = share)
+                showExport = false
             }
         )
     }

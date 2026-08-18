@@ -6,13 +6,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.GridOn
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -21,6 +21,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -29,22 +30,22 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.kvkleh.sbtsurvey.export.ExportFormat
 
-enum class ExportSheetMode { EXPORT, SHARE }
-
 /**
- * Format chooser shared by Export Data and Share Data.
+ * Export chooser.
  *
- * Both entry points produce the same artefacts; only what happens afterwards differs —
- * Export leaves the file on the device, Share hands it to the Android Sharesheet.
+ * One sheet covers both outcomes: **Save** writes the file wherever the surveyor picks
+ * through the system document picker, and **Share** hands it to the Android Sharesheet.
+ * They produce exactly the same file, which is why they belong on one screen rather than
+ * behind two separate menu entries.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ExportSheet(
-    mode: ExportSheetMode,
     busy: Boolean,
     surveyCount: Int,
+    photoCount: Int,
     onDismiss: () -> Unit,
-    onChoose: (ExportFormat) -> Unit
+    onChoose: (ExportFormat, Boolean) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -56,25 +57,26 @@ fun ExportSheet(
                 .padding(bottom = 36.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                text = if (mode == ExportSheetMode.SHARE) "Share Data" else "Export Data",
-                style = MaterialTheme.typography.headlineSmall
-            )
+            Text("Export Data", style = MaterialTheme.typography.headlineSmall)
             Text(
                 text = if (surveyCount == 0) {
                     "There are no surveys to export yet."
                 } else {
-                    "$surveyCount survey${if (surveyCount == 1) "" else "s"} will be included."
+                    "$surveyCount survey${if (surveyCount == 1) "" else "s"}" +
+                        (if (photoCount > 0) " and $photoCount photograph${if (photoCount == 1) "" else "s"}" else "") +
+                        " will be included."
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(2.dp))
 
             if (busy) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 28.dp),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -85,66 +87,78 @@ fun ExportSheet(
             } else {
                 FormatOption(
                     icon = Icons.Filled.TableChart,
-                    title = "Export CSV",
+                    title = "CSV (.csv)",
                     subtitle = "All survey fields as a comma-separated file",
-                    enabled = surveyCount > 0
-                ) { onChoose(ExportFormat.CSV) }
-
+                    enabled = surveyCount > 0,
+                    onSave = { onChoose(ExportFormat.CSV, false) },
+                    onShare = { onChoose(ExportFormat.CSV, true) }
+                )
                 FormatOption(
                     icon = Icons.Filled.GridOn,
-                    title = "Export Excel (.xlsx)",
+                    title = "Excel (.xlsx)",
                     subtitle = "Same fields as a spreadsheet workbook",
-                    enabled = surveyCount > 0
-                ) { onChoose(ExportFormat.XLSX) }
-
+                    enabled = surveyCount > 0,
+                    onSave = { onChoose(ExportFormat.XLSX, false) },
+                    onShare = { onChoose(ExportFormat.XLSX, true) }
+                )
                 FormatOption(
                     icon = Icons.Filled.FolderZip,
                     title = "Complete Survey Package (.zip)",
-                    subtitle = "CSV + Excel + all photographs + README",
-                    enabled = surveyCount > 0
-                ) { onChoose(ExportFormat.PACKAGE) }
+                    subtitle = "CSV + Excel + every photograph + a dataset README",
+                    enabled = surveyCount > 0,
+                    onSave = { onChoose(ExportFormat.PACKAGE, false) },
+                    onShare = { onChoose(ExportFormat.PACKAGE, true) }
+                )
+
+                Text(
+                    text = "Save writes the file to a folder you choose. Share sends it " +
+                        "through WhatsApp, email, Telegram, Drive or any other app on this " +
+                        "device.",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp)
+                )
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FormatOption(
     icon: ImageVector,
     title: String,
     subtitle: String,
     enabled: Boolean,
-    onClick: () -> Unit
+    onSave: () -> Unit,
+    onShare: () -> Unit
 ) {
-    OutlinedCard(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 76.dp),
-        shape = MaterialTheme.shapes.medium
-    ) {
+    OutlinedCard(modifier = Modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 18.dp, vertical = 16.dp),
+                .padding(start = 16.dp, top = 12.dp, end = 8.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(30.dp)
+                modifier = Modifier.size(28.dp)
             )
-            Spacer(Modifier.width(16.dp))
-            Column {
+            Spacer(Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleMedium)
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+            TextButton(onClick = onSave, enabled = enabled) { Text("Save") }
+            TextButton(onClick = onShare, enabled = enabled) {
+                Icon(Icons.Filled.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("Share")
             }
         }
     }

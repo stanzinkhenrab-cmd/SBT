@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -20,16 +21,22 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CenterFocusStrong
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.SaveAlt
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -42,27 +49,30 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kvkleh.sbtsurvey.data.local.SurveyEntity
+import com.kvkleh.sbtsurvey.export.ShareLauncher
+import com.kvkleh.sbtsurvey.map.GeoBounds
+import com.kvkleh.sbtsurvey.map.MapComposer
 import com.kvkleh.sbtsurvey.map.MapMath
+import com.kvkleh.sbtsurvey.map.MapProjection
+import com.kvkleh.sbtsurvey.map.MapSheet
+import com.kvkleh.sbtsurvey.map.TileSource
 import com.kvkleh.sbtsurvey.ui.components.Fmt
+import com.kvkleh.sbtsurvey.ui.components.rememberFileSaver
 import com.kvkleh.sbtsurvey.ui.surveyMapViewModel
-import kotlin.math.floor
 import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.roundToInt
 
 /** Leh town — the default view when no survey has coordinates yet. */
 private const val DEFAULT_LAT = 34.152588
@@ -72,61 +82,138 @@ private const val DEFAULT_LON = 77.577049
  * Offline survey map.
  *
  * Markers, coordinates and the scale bar come entirely from the local database, so the
- * map is fully usable with no connectivity. Background imagery is drawn from the tile
- * cache when tiles are available and quietly omitted when they are not.
+ * map is usable with no connectivity at all. Background imagery is layered underneath
+ * when it is available, and the surveyor chooses which imagery through the layers button.
+ *
+ * The map face is painted by [MapComposer], the same renderer used for the PDF, image and
+ * GeoTIFF exports, so what is on screen is exactly what gets saved.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SurveyMapScreen(onBack: () -> Unit, onOpenSurvey: (Long) -> Unit) {
     val viewModel = surveyMapViewModel()
     val surveys by viewModel.located.collectAsStateWithLifecycle()
+    val layer by viewModel.layer.collectAsStateWithLifecycle()
     val tileVersion by viewModel.tileVersion.collectAsStateWithLifecycle()
+    val tileError by viewModel.tileError.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val tileCache = viewModel.tileCache
 
-    var zoom by remember { mutableFloatStateOf(11f) }
+    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val fileSaver = rememberFileSaver { savedName, error ->
+        viewModel.reportSaved(savedName, error)
+    }
+
+    var zoom by remember { mutableFloatStateOf(13f) }
     var centerLat by remember { mutableStateOf(DEFAULT_LAT) }
     var centerLon by remember { mutableStateOf(DEFAULT_LON) }
     var selected by remember { mutableStateOf<SurveyEntity?>(null) }
     var canvasSize by remember { mutableStateOf(IntSize.Zero) }
+    var showLayers by remember { mutableStateOf(false) }
+    var showExport by remember { mutableStateOf(false) }
 
     fun fitToMarkers() {
-        if (surveys.isEmpty()) return
         val lats = surveys.mapNotNull { it.latitude }
         val lons = surveys.mapNotNull { it.longitude }
         if (lats.isEmpty() || lons.isEmpty()) return
         centerLat = (lats.min() + lats.max()) / 2
         centerLon = (lons.min() + lons.max()) / 2
-
-        val spanLat = max(lats.max() - lats.min(), 0.002)
-        val spanLon = max(lons.max() - lons.min(), 0.002)
-        // Pick the largest zoom at which the full extent still fits on screen.
-        val fitted = min(
-            log2(360.0 / spanLon),
-            log2(170.0 / spanLat)
-        ).toFloat()
-        zoom = fitted.coerceIn(MapMath.MIN_ZOOM, MapMath.MAX_ZOOM - 2f)
+        val spanLat = max(lats.max() - lats.min(), 0.004)
+        val spanLon = max(lons.max() - lons.min(), 0.004)
+        zoom = min(log2(360.0 / spanLon), log2(170.0 / spanLat))
+            .toFloat()
+            .coerceIn(MapMath.MIN_ZOOM, MapMath.MAX_ZOOM - 2f)
     }
 
     LaunchedEffect(surveys.size) {
         if (surveys.isNotEmpty()) fitToMarkers()
     }
 
-    val density = LocalDensity.current
-    val markerRadiusPx = with(density) { 11.dp.toPx() }
-    val hitRadiusPx = with(density) { 28.dp.toPx() }
-    val primary = MaterialTheme.colorScheme.primary
-    val secondary = MaterialTheme.colorScheme.secondary
-    val gridColor = MaterialTheme.colorScheme.outlineVariant
-    val backgroundColor = MaterialTheme.colorScheme.surfaceVariant
+    LaunchedEffect(uiState.message) {
+        uiState.message?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.consumeMessage()
+        }
+    }
+
+    LaunchedEffect(uiState.pendingSave) {
+        uiState.pendingSave?.let { result ->
+            fileSaver.save(result.file)
+            viewModel.consumeSave()
+        }
+    }
+
+    LaunchedEffect(uiState.pendingShare) {
+        uiState.pendingShare?.let { result ->
+            runCatching {
+                ShareLauncher.share(
+                    context = context,
+                    file = result.file,
+                    mimeType = result.format.mimeType,
+                    body = "Seabuckthorn Field Survey – Ladakh\n" +
+                        "Krishi Vigyan Kendra – Leh | MIDH-SBM\n\n" +
+                        "Survey map: ${result.markerCount} locations\n" +
+                        "File: ${result.file.name} (${result.sizeLabel})"
+                )
+            }.onFailure { snackbarHostState.showSnackbar("No app available to share this file.") }
+            viewModel.consumeShare()
+        }
+    }
+
+    // The extent currently on screen; also what an export covers.
+    val bounds = remember(centerLat, centerLon, zoom, canvasSize) {
+        GeoBounds.around(
+            centerLat, centerLon, zoom,
+            canvasSize.width.toFloat().coerceAtLeast(1f),
+            canvasSize.height.toFloat().coerceAtLeast(1f)
+        )
+    }
+
+    val sheet = remember(surveys, layer, bounds, selected) {
+        MapSheet(
+            surveys = surveys,
+            layer = layer,
+            bounds = bounds,
+            decorated = false,
+            labelMarkers = surveys.size <= 25,
+            highlightId = selected?.id
+        )
+    }
+
+    // Computed in composition (never during drawing) so taps can be matched to markers.
+    val projection: MapProjection? = remember(sheet, canvasSize) {
+        if (canvasSize.width == 0 || canvasSize.height == 0) {
+            null
+        } else {
+            MapComposer.projectionFor(
+                canvasSize.width.toFloat(),
+                canvasSize.height.toFloat(),
+                sheet
+            )
+        }
+    }
+
+    val hitRadiusPx = with(LocalDensity.current) { 30.dp.toPx() }
+
+    val tileSource = remember(tileCache) {
+        TileSource { requestedLayer, z, x, y ->
+            val cached = tileCache.peek(requestedLayer, z, x, y)
+            if (cached == null) tileCache.prefetch(requestedLayer, z, x, y)
+            cached
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
                     Column {
                         Text("Survey Map", style = MaterialTheme.typography.titleLarge)
                         Text(
-                            text = "${surveys.size} survey${if (surveys.size == 1) "" else "s"} with coordinates",
+                            text = "${surveys.size} survey${if (surveys.size == 1) "" else "s"} " +
+                                "· ${layer.label}",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -147,7 +234,7 @@ fun SurveyMapScreen(onBack: () -> Unit, onOpenSurvey: (Long) -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .background(backgroundColor)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
             Canvas(
                 modifier = Modifier
@@ -157,11 +244,11 @@ fun SurveyMapScreen(onBack: () -> Unit, onOpenSurvey: (Long) -> Unit) {
                         detectTransformGestures { _, pan, gestureZoom, _ ->
                             val level = MapMath.zoomLevel(zoom)
                             val tileSize = MapMath.scaledTileSize(zoom)
-                            var tx = MapMath.lonToTileX(centerLon, level) - pan.x / tileSize
-                            var ty = MapMath.latToTileY(centerLat, level) - pan.y / tileSize
                             val limit = MapMath.tileCount(level).toDouble()
-                            tx = tx.coerceIn(0.0, limit)
-                            ty = ty.coerceIn(0.0, limit)
+                            val tx = (MapMath.lonToTileX(centerLon, level) - pan.x / tileSize)
+                                .coerceIn(0.0, limit)
+                            val ty = (MapMath.latToTileY(centerLat, level) - pan.y / tileSize)
+                                .coerceIn(0.0, limit)
                             centerLon = MapMath.tileXToLon(tx, level)
                             centerLat = MapMath.tileYToLat(ty, level)
 
@@ -171,98 +258,99 @@ fun SurveyMapScreen(onBack: () -> Unit, onOpenSurvey: (Long) -> Unit) {
                             }
                         }
                     }
-                    .pointerInput(surveys, zoom, centerLat, centerLon, canvasSize) {
+                    .pointerInput(projection, surveys) {
                         detectTapGestures { tap ->
-                            val hit = surveys.minByOrNull { survey ->
-                                val position = project(
-                                    survey, zoom, centerLat, centerLon,
-                                    canvasSize.width.toFloat(), canvasSize.height.toFloat()
-                                ) ?: return@minByOrNull Float.MAX_VALUE
-                                (position - tap).getDistance()
-                            }
-                            val position = hit?.let {
-                                project(
-                                    it, zoom, centerLat, centerLon,
-                                    canvasSize.width.toFloat(), canvasSize.height.toFloat()
-                                )
-                            }
-                            selected = if (position != null &&
-                                (position - tap).getDistance() <= hitRadiusPx
-                            ) {
-                                hit
-                            } else {
-                                null
-                            }
+                            val current = projection ?: return@detectTapGestures
+                            selected = surveys
+                                .mapNotNull { survey ->
+                                    val lat = survey.latitude ?: return@mapNotNull null
+                                    val lon = survey.longitude ?: return@mapNotNull null
+                                    val point = Offset(current.xOf(lon), current.yOf(lat))
+                                    survey to (point - tap).getDistance()
+                                }
+                                .filter { it.second <= hitRadiusPx }
+                                .minByOrNull { it.second }
+                                ?.first
                         }
                     }
             ) {
-                val level = MapMath.zoomLevel(zoom)
-                val tileSize = MapMath.scaledTileSize(zoom)
-                val centerTileX = MapMath.lonToTileX(centerLon, level)
-                val centerTileY = MapMath.latToTileY(centerLat, level)
-
-                // Read so the canvas redraws when a tile download finishes.
+                // Read so the map repaints when a tile download finishes.
                 @Suppress("UNUSED_VARIABLE")
-                val redrawOnTileArrival = tileVersion
+                val repaintOnTileArrival = tileVersion
 
-                drawTiles(
-                    tileCache = tileCache,
-                    level = level,
-                    tileSize = tileSize,
-                    centerTileX = centerTileX,
-                    centerTileY = centerTileY,
-                    gridColor = gridColor
-                )
-
-                surveys.forEach { survey ->
-                    val position = projectInScope(
-                        survey, level, tileSize, centerTileX, centerTileY, size.width, size.height
-                    ) ?: return@forEach
-                    if (position.x < -50 || position.y < -50 ||
-                        position.x > size.width + 50 || position.y > size.height + 50
-                    ) {
-                        return@forEach
+                // The sheet's extent is derived from the measured canvas, so skip the
+                // first frame rather than drawing at a placeholder size.
+                if (canvasSize.width > 0 && canvasSize.height > 0) {
+                    drawIntoCanvas { canvas ->
+                        MapComposer.draw(
+                            canvas = canvas.nativeCanvas,
+                            width = size.width,
+                            height = size.height,
+                            sheet = sheet,
+                            tiles = tileSource
+                        )
                     }
-                    val isSelected = survey.id == selected?.id
-                    drawCircle(
-                        color = if (isSelected) secondary else primary,
-                        radius = if (isSelected) markerRadiusPx * 1.35f else markerRadiusPx,
-                        center = position
-                    )
-                    drawCircle(
-                        color = Color.White,
-                        radius = if (isSelected) markerRadiusPx * 1.35f else markerRadiusPx,
-                        center = position,
-                        style = Stroke(width = 3f)
-                    )
                 }
             }
 
-            MapControls(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(16.dp),
-                onZoomIn = { zoom = (zoom + 1f).coerceAtMost(MapMath.MAX_ZOOM) },
-                onZoomOut = { zoom = (zoom - 1f).coerceAtLeast(MapMath.MIN_ZOOM) },
-                onFit = { fitToMarkers() }
-            )
-
+            // Right-hand control stack.
             Column(
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(12.dp)
+                    .align(Alignment.TopEnd)
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text(
-                    text = if (tileCache.isOnline) {
-                        MapMath.metresPerPixel(centerLat, zoom).let {
-                            "Scale ≈ ${it.roundToInt()} m/px · ${com.kvkleh.sbtsurvey.map.TileCache.ATTRIBUTION}"
-                        }
-                    } else {
-                        "Offline – survey positions shown on grid · " +
-                            "Scale ≈ ${MapMath.metresPerPixel(centerLat, zoom).roundToInt()} m/px"
-                    },
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                FilledTonalIconButton(
+                    onClick = { showLayers = true },
+                    modifier = Modifier.size(52.dp)
+                ) {
+                    Icon(Icons.Filled.Layers, contentDescription = "Choose basemap")
+                }
+                FilledTonalIconButton(
+                    onClick = { showExport = true },
+                    modifier = Modifier.size(52.dp)
+                ) {
+                    Icon(Icons.Filled.SaveAlt, contentDescription = "Save map")
+                }
+                FilledTonalIconButton(
+                    onClick = { zoom = (zoom + 1f).coerceAtMost(MapMath.MAX_ZOOM) },
+                    modifier = Modifier.size(52.dp)
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = "Zoom in")
+                }
+                FilledTonalIconButton(
+                    onClick = { zoom = (zoom - 1f).coerceAtLeast(MapMath.MIN_ZOOM) },
+                    modifier = Modifier.size(52.dp)
+                ) {
+                    Icon(Icons.Filled.Remove, contentDescription = "Zoom out")
+                }
+                FilledTonalIconButton(
+                    onClick = { fitToMarkers() },
+                    modifier = Modifier.size(52.dp)
+                ) {
+                    Icon(Icons.Filled.CenterFocusStrong, contentDescription = "Fit all surveys")
+                }
+            }
+
+            // Attribution, as every basemap licence requires.
+            Text(
+                text = layer.attribution,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(10.dp)
+            )
+
+            tileError?.let { message ->
+                TileErrorBanner(
+                    message = message,
+                    onSwitchLayer = { showLayers = true },
+                    onDismiss = viewModel::dismissTileError,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(14.dp)
+                        .padding(end = 76.dp)
                 )
             }
 
@@ -284,6 +372,24 @@ fun SurveyMapScreen(onBack: () -> Unit, onOpenSurvey: (Long) -> Unit) {
                 }
             }
 
+            if (uiState.exporting) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .background(
+                            MaterialTheme.colorScheme.surface,
+                            MaterialTheme.shapes.medium
+                        )
+                        .padding(horizontal = 26.dp, vertical = 20.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                        Spacer(Modifier.width(14.dp))
+                        Text("Rendering map…", style = MaterialTheme.typography.titleMedium)
+                    }
+                }
+            }
+
             selected?.let { survey ->
                 MarkerDetailCard(
                     survey = survey,
@@ -291,124 +397,68 @@ fun SurveyMapScreen(onBack: () -> Unit, onOpenSurvey: (Long) -> Unit) {
                     onOpen = { onOpenSurvey(survey.id) },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        .padding(16.dp)
+                        .padding(14.dp)
                 )
             }
         }
     }
-}
 
-// --- Drawing helpers --------------------------------------------------------
+    if (showLayers) {
+        BaseMapChooserSheet(
+            selected = layer,
+            cacheSize = tileCache::cacheSizeBytes,
+            onSelect = {
+                viewModel.selectLayer(it)
+                showLayers = false
+            },
+            onClearCache = {
+                viewModel.clearTileCache()
+                showLayers = false
+            },
+            onDismiss = { showLayers = false }
+        )
+    }
 
-private fun DrawScope.drawTiles(
-    tileCache: com.kvkleh.sbtsurvey.map.TileCache,
-    level: Int,
-    tileSize: Float,
-    centerTileX: Double,
-    centerTileY: Double,
-    gridColor: Color
-) {
-    val halfWidthTiles = (size.width / 2f) / tileSize
-    val halfHeightTiles = (size.height / 2f) / tileSize
-    val firstX = floor(centerTileX - halfWidthTiles).toInt()
-    val lastX = floor(centerTileX + halfWidthTiles).toInt()
-    val firstY = floor(centerTileY - halfHeightTiles).toInt()
-    val lastY = floor(centerTileY + halfHeightTiles).toInt()
-
-    for (x in firstX..lastX) {
-        for (y in firstY..lastY) {
-            if (!MapMath.isValidTileY(y, level)) continue
-            val wrappedX = MapMath.normaliseTileX(x, level)
-            val left = size.width / 2f + ((x - centerTileX) * tileSize).toFloat()
-            val top = size.height / 2f + ((y - centerTileY) * tileSize).toFloat()
-
-            val bitmap = tileCache.peek(level, wrappedX, y)
-            if (bitmap != null) {
-                drawImage(
-                    image = bitmap.asImageBitmap(),
-                    srcOffset = IntOffset.Zero,
-                    srcSize = IntSize(bitmap.width, bitmap.height),
-                    dstOffset = IntOffset(left.roundToInt(), top.roundToInt()),
-                    dstSize = IntSize(tileSize.roundToInt() + 1, tileSize.roundToInt() + 1)
-                )
-            } else {
-                tileCache.prefetch(level, wrappedX, y)
-                // Graticule cell, so the map still reads as a map when offline.
-                drawRect(
-                    color = gridColor,
-                    topLeft = Offset(left, top),
-                    size = androidx.compose.ui.geometry.Size(tileSize, tileSize),
-                    style = Stroke(width = 1f)
-                )
+    if (showExport) {
+        MapExportSheet(
+            markerCount = surveys.size,
+            layerLabel = layer.label,
+            onDismiss = { showExport = false },
+            onChoose = { format, share ->
+                viewModel.exportMap(format, bounds, share)
+                showExport = false
             }
-        }
+        )
     }
 }
-
-private fun DrawScope.projectInScope(
-    survey: SurveyEntity,
-    level: Int,
-    tileSize: Float,
-    centerTileX: Double,
-    centerTileY: Double,
-    width: Float,
-    height: Float
-): Offset? {
-    val lat = survey.latitude ?: return null
-    val lon = survey.longitude ?: return null
-    val x = width / 2f + ((MapMath.lonToTileX(lon, level) - centerTileX) * tileSize).toFloat()
-    val y = height / 2f + ((MapMath.latToTileY(lat, level) - centerTileY) * tileSize).toFloat()
-    return Offset(x, y)
-}
-
-/** Same projection as [projectInScope], for hit testing outside a draw scope. */
-private fun project(
-    survey: SurveyEntity,
-    zoom: Float,
-    centerLat: Double,
-    centerLon: Double,
-    width: Float,
-    height: Float
-): Offset? {
-    val lat = survey.latitude ?: return null
-    val lon = survey.longitude ?: return null
-    val level = MapMath.zoomLevel(zoom)
-    val tileSize = MapMath.scaledTileSize(zoom)
-    val centerTileX = MapMath.lonToTileX(centerLon, level)
-    val centerTileY = MapMath.latToTileY(centerLat, level)
-    val x = width / 2f + ((MapMath.lonToTileX(lon, level) - centerTileX) * tileSize).toFloat()
-    val y = height / 2f + ((MapMath.latToTileY(lat, level) - centerTileY) * tileSize).toFloat()
-    return Offset(x, y)
-}
-
-private fun log2(value: Double): Double = ln(value) / ln(2.0)
-
-// --- Overlays ---------------------------------------------------------------
 
 @Composable
-private fun MapControls(
-    modifier: Modifier = Modifier,
-    onZoomIn: () -> Unit,
-    onZoomOut: () -> Unit,
-    onFit: () -> Unit
+private fun TileErrorBanner(
+    message: String,
+    onSwitchLayer: () -> Unit,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Column(
+    Card(
         modifier = modifier,
-        verticalArrangement = Arrangement.spacedBy(10.dp)
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer
+        )
     ) {
-        FilledTonalIconButton(onClick = onZoomIn, modifier = Modifier.size(52.dp)) {
-            Icon(Icons.Filled.Add, contentDescription = "Zoom in")
-        }
-        FilledTonalIconButton(onClick = onZoomOut, modifier = Modifier.size(52.dp)) {
-            Icon(Icons.Filled.Remove, contentDescription = "Zoom out")
-        }
-        FilledTonalIconButton(onClick = onFit, modifier = Modifier.size(52.dp)) {
-            Icon(Icons.Filled.CenterFocusStrong, contentDescription = "Fit all surveys")
+        Column(modifier = Modifier.padding(14.dp)) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer
+            )
+            Row {
+                TextButton(onClick = onSwitchLayer) { Text("Change basemap") }
+                TextButton(onClick = onDismiss) { Text("Dismiss") }
+            }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MarkerDetailCard(
     survey: SurveyEntity,
@@ -420,8 +470,7 @@ private fun MarkerDetailCard(
         modifier = modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-        onClick = onOpen
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -441,12 +490,10 @@ private fun MarkerDetailCard(
             MarkerRow("Latitude", Fmt.coordinate(survey.latitude))
             MarkerRow("Longitude", Fmt.coordinate(survey.longitude))
             MarkerRow("Altitude", Fmt.metres(survey.altitude))
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = "Tap this card to open the full record",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Spacer(Modifier.height(6.dp))
+            TextButton(onClick = onOpen, modifier = Modifier.heightIn(min = 48.dp)) {
+                Text("Open full survey record")
+            }
         }
     }
 }
@@ -466,3 +513,5 @@ private fun MarkerRow(label: String, value: String) {
         )
     }
 }
+
+private fun log2(value: Double): Double = ln(value) / ln(2.0)

@@ -60,7 +60,7 @@ fun AboutScreen(onBack: () -> Unit) {
             verticalArrangement = Arrangement.Top
         ) {
             Image(
-                painter = painterResource(R.drawable.ic_splash_logo),
+                painter = painterResource(R.drawable.ic_logo),
                 contentDescription = null,
                 modifier = Modifier.size(110.dp)
             )

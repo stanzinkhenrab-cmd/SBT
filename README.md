@@ -22,20 +22,24 @@ typed. There is no login, no cloud account and no network requirement.
 | Autosave | Debounced write on every edit, immediate write on section change, photo, GPS fix, backgrounding and finish |
 | GPS | `FusedLocationProviderClient`, high accuracy, retains the *best* fix, retry/refresh, never blocks the form |
 | Photos | Camera writes straight into permanent storage via FileProvider; gallery imports are copied in |
-| Map | Offline canvas map; markers from the local database, OpenStreetMap tiles cached opportunistically |
-| Export | CSV, Excel (.xlsx), and a complete ZIP package with photographs and a README |
-| Sharing | Android Sharesheet (`ACTION_SEND`) — WhatsApp, Gmail, Telegram, Drive, Bluetooth, anything installed |
+| Map | Offline canvas map with satellite, terrain, street or plain-grid basemaps; markers always from the local database |
+| Map export | Print-ready PDF sheet, georeferenced GeoTIFF (EPSG:3857) for ArcGIS/QGIS, plus JPG and PNG |
+| Data export | CSV, Excel (.xlsx), and a complete ZIP package with photographs and a README |
+| Sharing | Save to any folder via the system picker, or send through the Android Sharesheet — WhatsApp, Gmail, Telegram, Drive, Bluetooth |
 
 ## Navigation
 
 ```
 Welcome  →  Dashboard  →  Survey Form  →  Save & Finish  →  Thank You  →  Survey List
                   ⋮ (top-right)
-                  ├── Survey Map
-                  ├── Export Data
-                  ├── Share Data
+                  ├── Survey Map      (basemaps, and PDF / GeoTIFF / JPG / PNG export)
+                  ├── Export Data     (CSV / Excel / ZIP — save or share)
                   └── About
 ```
+
+Export and share sit on one screen rather than two menu entries: both produce the same
+file, and only the last step differs — **Save** writes it wherever you choose through the
+system file picker, **Share** hands it to the Android Sharesheet.
 
 ## Survey form sections
 
@@ -142,7 +146,15 @@ app/src/main/java/com/kvkleh/sbtsurvey/
   cells kept numeric.
 * **Custom offline map instead of Google Maps.** The Maps SDK needs an API key and shows
   a blank grid with no connectivity. The canvas map draws survey markers from the local
-  database, so coordinates are always visible in the field.
+  database, so coordinates are always visible in the field, and it can layer Esri
+  satellite or terrain imagery underneath when a connection happens to be available.
+* **One renderer for screen and export.** `MapComposer` paints the interactive map, the
+  PDF page, the JPG/PNG and the GeoTIFF, so what a surveyor sees is exactly what gets
+  printed. Drawing to a plain canvas keeps PDF text and symbols vector while only the
+  imagery is raster.
+* **Hand-written GeoTIFF.** A full geospatial stack would add tens of megabytes for one
+  export format. The writer emits a GeoTIFF 1.8.2 raster whose coordinate system travels
+  inside the file, verified against GDAL.
 * **No DI framework.** The object graph is small and entirely local; keeping it explicit
   in `AppContainer` makes the data path obvious.
 * **Intent-based camera capture.** `ActivityResultContracts.TakePicture` with a

@@ -86,7 +86,7 @@ fun WelcomeScreen(onContinue: () -> Unit) {
             verticalArrangement = Arrangement.Center
         ) {
             Image(
-                painter = painterResource(R.drawable.ic_splash_logo),
+                painter = painterResource(R.drawable.ic_logo),
                 contentDescription = null,
                 modifier = Modifier.size(132.dp)
             )

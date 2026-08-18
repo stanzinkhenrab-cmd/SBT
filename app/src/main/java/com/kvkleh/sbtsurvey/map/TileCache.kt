@@ -21,13 +21,16 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Disk-and-memory cache of raster map tiles.
+ * Disk-and-memory cache of raster map tiles, one directory per basemap layer.
  *
- * The survey map is offline-first: survey markers, coordinates and the scale grid are
- * always drawn from the local database. Background imagery is a bonus — tiles already on
- * disk are used immediately, and new tiles are fetched only when a network happens to be
- * available. With no connectivity the map simply falls back to a plain graticule
- * background; nothing fails and nothing blocks.
+ * The survey map is offline-first: markers, coordinates and the scale bar always come
+ * from the local database. Imagery is a bonus — tiles already on disk are drawn
+ * immediately, and new tiles are fetched only when a network is present.
+ *
+ * Responses are checked rather than trusted. A tile provider that refuses the request
+ * (an HTTP error, or an HTML page in place of an image) is reported through [error] so
+ * the map can tell the surveyor what happened, instead of silently drawing a "blocked"
+ * placeholder tile as though it were imagery.
  */
 class TileCache(
     private val context: Context,
@@ -38,7 +41,7 @@ class TileCache(
         override fun sizeOf(key: String, value: Bitmap) = 1
     }
 
-    private val diskDir: File
+    private val rootDir: File
         get() = File(context.filesDir, "map_tiles").apply { if (!exists()) mkdirs() }
 
     private val inFlight = mutableSetOf<String>()
@@ -48,6 +51,12 @@ class TileCache(
     private val _version = MutableStateFlow(0)
     val version: StateFlow<Int> = _version.asStateFlow()
 
+    /** Human-readable reason the current layer has no imagery, or null when fine. */
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
+    private var consecutiveFailures = 0
+
     val isOnline: Boolean
         get() = runCatching {
             val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -56,12 +65,18 @@ class TileCache(
             capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
         }.getOrDefault(false)
 
+    fun clearError() {
+        consecutiveFailures = 0
+        _error.value = null
+    }
+
     /** Cached tiles only — never blocks and never touches the network. */
-    fun peek(zoom: Int, x: Int, y: Int): Bitmap? {
-        val key = key(zoom, x, y)
+    fun peek(layer: BaseMapLayer, zoom: Int, x: Int, y: Int): Bitmap? {
+        if (!layer.usesNetwork) return null
+        val key = key(layer, zoom, x, y)
         memory.get(key)?.let { return it }
 
-        val file = fileFor(zoom, x, y)
+        val file = fileFor(layer, zoom, x, y)
         if (file.exists() && file.length() > 0) {
             val bitmap = runCatching { BitmapFactory.decodeFile(file.absolutePath) }.getOrNull()
             if (bitmap != null) {
@@ -74,57 +89,119 @@ class TileCache(
     }
 
     /** Queues a background download for a tile that is not cached yet. */
-    fun prefetch(zoom: Int, x: Int, y: Int) {
+    fun prefetch(layer: BaseMapLayer, zoom: Int, x: Int, y: Int) {
+        if (!layer.usesNetwork || zoom > layer.maxZoom) return
         if (!MapMath.isValidTileY(y, zoom)) return
-        val key = key(zoom, x, y)
+
+        val key = key(layer, zoom, x, y)
         synchronized(inFlight) {
-            if (key in inFlight) return
-            if (inFlight.size > MAX_QUEUED) return
+            if (key in inFlight || inFlight.size > MAX_QUEUED) return
             inFlight += key
         }
         if (!isOnline) {
             synchronized(inFlight) { inFlight -= key }
+            reportOffline()
             return
         }
         scope.launch {
-            downloadLimit.withPermit { download(zoom, x, y, key) }
+            downloadLimit.withPermit { download(layer, zoom, x, y, key) }
         }
     }
 
-    private suspend fun download(zoom: Int, x: Int, y: Int, key: String) = withContext(Dispatchers.IO) {
+    /**
+     * Fetches a tile, waiting for the network if necessary. Used when rendering an
+     * export, where a missing tile would leave a hole in the printed map.
+     */
+    suspend fun fetchBlocking(layer: BaseMapLayer, zoom: Int, x: Int, y: Int): Bitmap? {
+        peek(layer, zoom, x, y)?.let { return it }
+        if (!layer.usesNetwork || zoom > layer.maxZoom || !MapMath.isValidTileY(y, zoom)) return null
+        if (!isOnline) return null
+
+        val key = key(layer, zoom, x, y)
+        downloadLimit.withPermit { download(layer, zoom, x, y, key) }
+        return peek(layer, zoom, x, y)
+    }
+
+    private suspend fun download(
+        layer: BaseMapLayer,
+        zoom: Int,
+        x: Int,
+        y: Int,
+        key: String
+    ) = withContext(Dispatchers.IO) {
+        val url = layer.tileUrl(zoom, x, y) ?: return@withContext
         var connection: HttpURLConnection? = null
         try {
-            val target = fileFor(zoom, x, y)
+            val target = fileFor(layer, zoom, x, y)
             target.parentFile?.mkdirs()
-            connection = (URL(tileUrl(zoom, x, y)).openConnection() as HttpURLConnection).apply {
+            connection = (URL(url).openConnection() as HttpURLConnection).apply {
                 connectTimeout = CONNECT_TIMEOUT_MS
                 readTimeout = READ_TIMEOUT_MS
+                instanceFollowRedirects = true
                 setRequestProperty("User-Agent", USER_AGENT)
+                setRequestProperty("Accept", "image/png,image/jpeg,image/*;q=0.8")
             }
-            if (connection.responseCode == HttpURLConnection.HTTP_OK) {
-                val temp = File(target.parentFile, target.name + ".part")
-                connection.inputStream.use { input ->
-                    temp.outputStream().use { output -> input.copyTo(output) }
-                }
-                val stored = temp.length() > 0 && temp.renameTo(target)
-                if (!stored) {
-                    temp.delete()
-                } else {
-                    trimDiskCache()
-                    _version.update { it + 1 }
-                }
+
+            val status = connection.responseCode
+            val contentType = connection.contentType.orEmpty()
+
+            if (status != HttpURLConnection.HTTP_OK) {
+                recordFailure(layer, "HTTP $status")
+                return@withContext
             }
+            // A provider that refuses the request often answers 200 with an HTML notice
+            // or a placeholder image. Anything that is not an image is not imagery.
+            if (!contentType.startsWith("image/")) {
+                recordFailure(layer, "the provider returned $contentType instead of imagery")
+                return@withContext
+            }
+
+            val temp = File(target.parentFile, target.name + ".part")
+            connection.inputStream.use { input ->
+                temp.outputStream().use { output -> input.copyTo(output) }
+            }
+
+            if (temp.length() <= 0 || !temp.renameTo(target)) {
+                temp.delete()
+                recordFailure(layer, "an empty tile was returned")
+                return@withContext
+            }
+
+            consecutiveFailures = 0
+            _error.value = null
+            trimDiskCache()
+            _version.update { it + 1 }
         } catch (e: Exception) {
-            // Offline, DNS failure or an unreachable tile server: the map keeps working
-            // without imagery, so there is nothing to report to the surveyor.
+            recordFailure(layer, e.message ?: "the network request failed")
         } finally {
             runCatching { connection?.disconnect() }
             synchronized(inFlight) { inFlight -= key }
         }
     }
 
+    /**
+     * A single failure is not worth interrupting the surveyor over; a run of them means
+     * the layer genuinely is not going to load.
+     */
+    private fun recordFailure(layer: BaseMapLayer, reason: String) {
+        consecutiveFailures++
+        if (consecutiveFailures >= FAILURES_BEFORE_REPORTING) {
+            _error.value = "${layer.label} imagery could not be loaded ($reason). " +
+                "Survey positions are still shown — switch to Offline grid to hide this."
+        }
+    }
+
+    private fun reportOffline() {
+        consecutiveFailures++
+        if (consecutiveFailures >= FAILURES_BEFORE_REPORTING) {
+            _error.value = "No internet connection, so new map imagery cannot be " +
+                "downloaded. Tiles already saved on this device are still shown, and " +
+                "survey positions always are."
+        }
+    }
+
     private fun trimDiskCache() {
-        val files = diskDir.walkTopDown().filter { it.isFile }.toList()
+        val files = rootDir.walkTopDown().filter { it.isFile }.toList()
         var total = files.sumOf { it.length() }
         if (total <= MAX_DISK_BYTES) return
         files.sortedBy { it.lastModified() }.forEach { file ->
@@ -137,29 +214,36 @@ class TileCache(
     /** Removes every cached tile; survey data is untouched. */
     suspend fun clear() = withContext(Dispatchers.IO) {
         memory.evictAll()
-        diskDir.deleteRecursively()
-        diskDir.mkdirs()
+        rootDir.deleteRecursively()
+        rootDir.mkdirs()
+        clearError()
         _version.update { it + 1 }
     }
 
     fun cacheSizeBytes(): Long =
-        runCatching { diskDir.walkTopDown().filter { it.isFile }.sumOf { it.length() } }.getOrDefault(0L)
+        runCatching { rootDir.walkTopDown().filter { it.isFile }.sumOf { it.length() } }
+            .getOrDefault(0L)
 
-    private fun fileFor(zoom: Int, x: Int, y: Int) = File(diskDir, "$zoom/$x/$y.png")
+    private fun fileFor(layer: BaseMapLayer, zoom: Int, x: Int, y: Int) =
+        File(rootDir, "${layer.id}/$zoom/$x/$y.tile")
 
-    private fun key(zoom: Int, x: Int, y: Int) = "$zoom/$x/$y"
-
-    private fun tileUrl(zoom: Int, x: Int, y: Int) = "https://tile.openstreetmap.org/$zoom/$x/$y.png"
+    private fun key(layer: BaseMapLayer, zoom: Int, x: Int, y: Int) = "${layer.id}/$zoom/$x/$y"
 
     companion object {
-        const val ATTRIBUTION = "Map data © OpenStreetMap contributors"
+        /**
+         * A descriptive User-Agent naming the application and its operator, which tile
+         * providers require in order to serve a non-browser client.
+         */
         private const val USER_AGENT =
-            "SeabuckthornFieldSurvey/1.0 (Krishi Vigyan Kendra Leh; offline field survey app)"
+            "SeabuckthornFieldSurvey/1.0 (Android; Krishi Vigyan Kendra Leh, Ladakh; " +
+                "offline agricultural field survey)"
+
         private const val CONNECT_TIMEOUT_MS = 8_000
         private const val READ_TIMEOUT_MS = 8_000
-        private const val MEMORY_TILES = 96
+        private const val MEMORY_TILES = 120
         private const val MAX_PARALLEL_DOWNLOADS = 4
         private const val MAX_QUEUED = 64
-        private const val MAX_DISK_BYTES = 60L * 1024 * 1024
+        private const val FAILURES_BEFORE_REPORTING = 4
+        private const val MAX_DISK_BYTES = 120L * 1024 * 1024
     }
 }

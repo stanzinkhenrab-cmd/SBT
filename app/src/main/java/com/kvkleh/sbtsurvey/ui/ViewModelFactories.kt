@@ -56,7 +56,7 @@ fun surveyMapViewModel(): SurveyMapViewModel {
     val container = appContainer()
     return viewModel(
         factory = SimpleFactory(
-            { SurveyMapViewModel(it.surveyRepository, it.tileCache) },
+            { SurveyMapViewModel(it.surveyRepository, it.tileCache, it.appContext) },
             container
         )
     )
