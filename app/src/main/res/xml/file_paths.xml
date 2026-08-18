@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Persistent photo store inside app-private files dir -->
+    <files-path
+        name="survey_photos"
+        path="survey_photos/" />
+    <!-- Generated export files (CSV / XLSX / ZIP) -->
+    <cache-path
+        name="exports"
+        path="exports/" />
+    <files-path
+        name="exports_files"
+        path="exports/" />
+</paths>

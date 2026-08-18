@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SBT Field Survey</string>
+    <string name="app_full_name">Seabuckthorn Field Survey – Ladakh</string>
+    <string name="developer_line">Developed by Stanzin Khenrab</string>
+    <string name="organisation_line">Krishi Vigyan Kendra – Leh, Ladakh</string>
+    <string name="scheme_line">MIDH-SBM</string>
+    <string name="welcome_to">Welcome to</string>
+
+    <string name="new_survey">New Survey</string>
+    <string name="survey_map">Survey Map</string>
+    <string name="export_data">Export Data</string>
+    <string name="share_data">Share Data</string>
+    <string name="about">About</string>
+
+    <string name="photo_capture_description">Seabuckthorn survey photograph</string>
+    <string name="more_options">More options</string>
+    <string name="back">Back</string>
+
+    <string name="rationale_location">Location access is used only to record the GPS coordinates of each survey point. The app never shares your location.</string>
+    <string name="rationale_camera">Camera access is used only to photograph the surveyed shrub. Photographs stay on this device.</string>
+
+    <string name="err_gps_unavailable_title">GPS unavailable</string>
+    <string name="err_gps_unavailable_body">Unable to obtain GPS location. Please move to an open area and try Refresh GPS.</string>
+    <string name="err_camera_title">Camera unavailable</string>
+    <string name="err_camera_body">Camera is unavailable. Please check camera permission.</string>
+    <string name="err_save_title">Save failed</string>
+    <string name="err_save_body">Survey could not be saved. Please try again.</string>
+</resources>
