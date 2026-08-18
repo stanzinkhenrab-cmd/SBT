@@ -21,6 +21,7 @@ typed. There is no login, no cloud account and no network requirement.
 | Survey ID | `SBT-<year>-<0001>`, allocated inside a database transaction — never duplicated |
 | Autosave | Debounced write on every edit, immediate write on section change, photo, GPS fix, backgrounding and finish |
 | GPS | `FusedLocationProviderClient`, high accuracy, retains the *best* fix, retry/refresh, never blocks the form |
+| Manual coordinates | Optional typed latitude, longitude and altitude; recorded as such so a device fix never overwrites them |
 | Photos | Camera writes straight into permanent storage via FileProvider; gallery imports are copied in |
 | Map | Offline canvas map with satellite, terrain, street or plain-grid basemaps; markers always from the local database |
 | Map export | Print-ready PDF sheet, georeferenced GeoTIFF (EPSG:3857) for ArcGIS/QGIS, plus JPG and PNG |
@@ -46,7 +47,9 @@ system file picker, **Share** hands it to the Android Sharesheet.
 1. Survey ID (auto-generated, with device date and time)
 2. Location — district, block, village, site
 3. Photo — take, choose, preview, retake, delete
-4. GPS & Elevation — latitude, longitude, altitude, accuracy, acquisition time
+4. GPS & Elevation — latitude, longitude, altitude, accuracy, acquisition time; a
+   switch turns on optional manual entry when GPS is unavailable or the position is
+   already known from another instrument
 5. Shrub Type — Hardwood / Soft wood / Mixed
 6. Plant Height — value plus `m | ft` unit selector, live conversion
 7. Dominant Fruit Maturity Stage — Unriped / Intermediate / Ripened / Overripened, plus Harvest Date
@@ -172,6 +175,9 @@ Run these on both a phone and a tablet before handing the app to surveyors.
 - [ ] Acquire GPS on a tablet (expect a longer cold fix; the elapsed counter should run)
 - [ ] Press Refresh GPS and confirm a new reading replaces the old one
 - [ ] Confirm latitude, longitude and altitude appear on the detail screen
+- [ ] Enter coordinates manually, reopen the survey, and confirm a passing GPS fix does
+      not overwrite them
+- [ ] Confirm the exported "Coordinate Source" column reads Entered manually for those
 - [ ] Create several surveys and confirm every Survey ID is unique and sequential
 - [ ] Export CSV, Excel and the ZIP package; open each on a computer
 - [ ] Confirm all columns are populated and photographs are present in the ZIP

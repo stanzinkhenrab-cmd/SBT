@@ -66,6 +66,13 @@ data class SurveyEntity(
     @ColumnInfo(name = "gps_accuracy") val gpsAccuracy: Float? = null,
     /** Epoch millis at which the retained fix was obtained. */
     @ColumnInfo(name = "gps_timestamp") val gpsTimestamp: Long? = null,
+    /**
+     * "gps" when the device supplied the coordinates, "manual" when the surveyor typed
+     * them. Recorded because the two carry very different accuracy, and an analyst
+     * needs to be able to tell them apart.
+     */
+    @ColumnInfo(name = "location_source", defaultValue = "gps")
+    val locationSource: String = "gps",
 
     // --- Plant characteristics ------------------------------------------------
     @ColumnInfo(name = "shrub_type") val shrubType: String? = null,
@@ -89,6 +96,8 @@ data class SurveyEntity(
     @ColumnInfo(name = "status") val status: String = "draft"
 ) {
     val hasGps: Boolean get() = latitude != null && longitude != null
+
+    val isManualLocation: Boolean get() = locationSource == "manual"
 
     companion object {
         const val DEFAULT_ORGANIZATION = "Krishi Vigyan Kendra – Leh"

@@ -4,10 +4,12 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [SurveyEntity::class, SurveySequenceEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -35,7 +37,19 @@ abstract class AppDatabase : RoomDatabase() {
                 .addMigrations(*MIGRATIONS)
                 .build()
 
-        /** Schema migrations, oldest first. Empty at version 1. */
-        private val MIGRATIONS = emptyArray<androidx.room.migration.Migration>()
+        /**
+         * Version 2 records where a survey's coordinates came from. Existing records
+         * were all acquired from the device, so they default to "gps".
+         */
+        private val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE surveys ADD COLUMN location_source TEXT NOT NULL DEFAULT 'gps'"
+                )
+            }
+        }
+
+        /** Schema migrations, oldest first. */
+        private val MIGRATIONS = arrayOf<Migration>(MIGRATION_1_2)
     }
 }

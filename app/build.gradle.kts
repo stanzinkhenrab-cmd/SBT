@@ -107,7 +107,8 @@ android {
 }
 
 ksp {
-    // Schemas are checked in so that future migrations can be generated and verified.
+    // Schema JSON is written here on every build; commit it so future migrations can
+    // be generated and verified against the previous version.
     arg("room.schemaLocation", "$projectDir/schemas")
     arg("room.incremental", "true")
 }

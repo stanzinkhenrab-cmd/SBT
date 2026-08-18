@@ -2,6 +2,7 @@ package com.kvkleh.sbtsurvey.export
 
 import com.kvkleh.sbtsurvey.data.local.SurveyEntity
 import com.kvkleh.sbtsurvey.domain.HeightUnit
+import com.kvkleh.sbtsurvey.domain.LocationSource
 import com.kvkleh.sbtsurvey.domain.toMetres
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -52,6 +53,9 @@ object SurveyColumns {
         Column("Altitude (m)") { number(it.altitude) },
         Column("GPS Accuracy (m)") { number(it.gpsAccuracy) },
         Column("GPS Timestamp") { timestamp(it.gpsTimestamp) },
+        Column("Coordinate Source") { survey ->
+            text(LocationSource.fromStorage(survey.locationSource).label)
+        },
         Column("Shrub Type") { text(it.shrubType) },
         Column("Plant Height") { number(it.plantHeight) },
         Column("Plant Height Unit") { text(it.plantHeightUnit) },

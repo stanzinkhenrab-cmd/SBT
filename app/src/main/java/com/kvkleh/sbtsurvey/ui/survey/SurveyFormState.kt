@@ -17,6 +17,9 @@ object Field {
     const val ORGANIZATION = "organization"
     const val DISTRICT = "district"
     const val VILLAGE = "village"
+    const val LATITUDE = "latitude"
+    const val LONGITUDE = "longitude"
+    const val ALTITUDE = "altitude"
     const val SHRUB_TYPE = "shrubType"
     const val PLANT_HEIGHT = "plantHeight"
     const val MATURITY_STAGE = "maturityStage"
@@ -38,6 +41,14 @@ data class SurveyFormUiState(
     val tssText: String = "",
 
     val organizationIsOther: Boolean = false,
+
+    // Manual coordinate entry, for a handheld receiver reading, a map position, or a
+    // point recorded on an earlier visit.
+    val manualLocation: Boolean = false,
+    val manualLatitudeText: String = "",
+    val manualLongitudeText: String = "",
+    val manualAltitudeText: String = "",
+
     val autoSave: AutoSaveState = AutoSaveState.Idle,
     val errors: Map<String, String> = emptyMap(),
     /** One-shot user message (error dialogs, save failures). */

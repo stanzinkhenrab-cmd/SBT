@@ -38,6 +38,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.kvkleh.sbtsurvey.data.local.SurveyEntity
+import com.kvkleh.sbtsurvey.domain.LocationSource
 import com.kvkleh.sbtsurvey.ui.appContainer
 import com.kvkleh.sbtsurvey.ui.components.Fmt
 import com.kvkleh.sbtsurvey.ui.components.InfoRow
@@ -141,8 +142,22 @@ fun SurveyDetailScreen(
                         InfoRow("Latitude", Fmt.coordinate(record.latitude))
                         InfoRow("Longitude", Fmt.coordinate(record.longitude))
                         InfoRow("Altitude", Fmt.metres(record.altitude))
-                        InfoRow("Accuracy", Fmt.accuracy(record.gpsAccuracy))
-                        InfoRow("Acquired at", Fmt.dateTime(record.gpsTimestamp))
+                        InfoRow(
+                            label = "Accuracy",
+                            value = if (record.isManualLocation) {
+                                "Not applicable"
+                            } else {
+                                Fmt.accuracy(record.gpsAccuracy)
+                            }
+                        )
+                        InfoRow(
+                            label = if (record.isManualLocation) "Entered at" else "Acquired at",
+                            value = Fmt.dateTime(record.gpsTimestamp)
+                        )
+                        InfoRow(
+                            label = "Source",
+                            value = LocationSource.fromStorage(record.locationSource).label
+                        )
                     }
                 }
             }

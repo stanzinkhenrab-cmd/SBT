@@ -9,6 +9,7 @@ import com.kvkleh.sbtsurvey.data.repo.SurveyRepository
 import com.kvkleh.sbtsurvey.domain.EaseOfHarvest
 import com.kvkleh.sbtsurvey.domain.FruitShape
 import com.kvkleh.sbtsurvey.domain.HeightUnit
+import com.kvkleh.sbtsurvey.domain.LocationSource
 import com.kvkleh.sbtsurvey.domain.MaturityStage
 import com.kvkleh.sbtsurvey.domain.ShrubType
 import com.kvkleh.sbtsurvey.location.GpsState
@@ -61,16 +62,23 @@ class SurveyFormViewModel(
                 it.copy(
                     loading = false,
                     survey = survey,
-                    plantHeightText = survey.plantHeight?.let(::trimNumber).orEmpty(),
-                    berryDiameterText = survey.berryDiameter?.let(::trimNumber).orEmpty(),
-                    tssText = survey.tssBrix?.let(::trimNumber).orEmpty(),
+                    plantHeightText = survey.plantHeight?.let { value -> trimNumber(value) }.orEmpty(),
+                    berryDiameterText = survey.berryDiameter?.let { value -> trimNumber(value) }.orEmpty(),
+                    tssText = survey.tssBrix?.let { value -> trimNumber(value) }.orEmpty(),
                     organizationIsOther = survey.organization.isNotBlank() &&
-                        survey.organization != SurveyEntity.DEFAULT_ORGANIZATION
+                        survey.organization != SurveyEntity.DEFAULT_ORGANIZATION,
+                    manualLocation = survey.locationSource == LocationSource.MANUAL.storageValue,
+                    manualLatitudeText = survey.latitude?.let { value -> trimCoordinate(value) }.orEmpty(),
+                    manualLongitudeText = survey.longitude?.let { value -> trimCoordinate(value) }.orEmpty(),
+                    manualAltitudeText = survey.altitude?.let { value -> trimNumber(value) }.orEmpty()
                 )
             }
             // Re-adopt a fix already stored on the record so re-opening a survey does not
-            // discard the coordinates that were captured in the field.
-            locationController.adoptSavedFix(survey.toFix())
+            // discard the coordinates that were captured in the field. Manually entered
+            // coordinates are not a fix, so they are left to the manual panel.
+            if (survey.locationSource != LocationSource.MANUAL.storageValue) {
+                locationController.adoptSavedFix(survey.toFix())
+            }
         }
 
         // Mirror every accepted GPS fix onto the record.
@@ -78,6 +86,8 @@ class SurveyFormViewModel(
             locationController.state.collect { gps ->
                 val fix = gps.fix ?: return@collect
                 val current = _state.value.survey ?: return@collect
+                // The surveyor typed these; a passing fix does not get to overwrite them.
+                if (current.locationSource == LocationSource.MANUAL.storageValue) return@collect
                 if (current.latitude == fix.latitude &&
                     current.longitude == fix.longitude &&
                     current.gpsAccuracy == fix.accuracy
@@ -125,11 +135,73 @@ class SurveyFormViewModel(
 
     // --- GPS ------------------------------------------------------------------
 
-    fun onGetLocation() = locationController.start(force = false)
+    fun onGetLocation() {
+        useDeviceLocation()
+        locationController.start(force = false)
+    }
 
-    fun onRefreshLocation() = locationController.refresh()
+    fun onRefreshLocation() {
+        useDeviceLocation()
+        locationController.refresh()
+    }
 
     fun onStopLocation() = locationController.stop()
+
+    /** Asking the device for a position is an explicit choice to stop entering by hand. */
+    private fun useDeviceLocation() {
+        if (!_state.value.manualLocation) return
+        _state.update { it.copy(manualLocation = false) }
+        edit { it.copy(locationSource = LocationSource.GPS.storageValue) }
+    }
+
+    // --- Manual coordinates ---------------------------------------------------
+
+    /**
+     * Switches between a device fix and typed coordinates.
+     *
+     * Turning it on keeps whatever is already on the record as the starting values, so a
+     * surveyor can correct a poor fix rather than retype it from nothing.
+     */
+    fun onManualLocationToggled(enabled: Boolean) {
+        val survey = _state.value.survey ?: return
+        if (enabled) {
+            locationController.stop()
+            _state.update {
+                it.copy(
+                    manualLocation = true,
+                    manualLatitudeText = survey.latitude?.let { value -> trimCoordinate(value) }.orEmpty(),
+                    manualLongitudeText = survey.longitude?.let { value -> trimCoordinate(value) }.orEmpty(),
+                    manualAltitudeText = survey.altitude?.let { value -> trimNumber(value) }.orEmpty()
+                )
+            }
+            edit {
+                it.copy(
+                    locationSource = LocationSource.MANUAL.storageValue,
+                    // A typed coordinate has no instrument accuracy to report.
+                    gpsAccuracy = null,
+                    gpsTimestamp = System.currentTimeMillis()
+                )
+            }
+        } else {
+            _state.update { it.copy(manualLocation = false) }
+            edit { it.copy(locationSource = LocationSource.GPS.storageValue) }
+        }
+    }
+
+    fun onManualLatitudeChange(value: String) {
+        _state.update { it.copy(manualLatitudeText = value) }
+        edit { it.copy(latitude = value.toDoubleOrNull()?.takeIf { parsed -> isValidLatitude(parsed) }) }
+    }
+
+    fun onManualLongitudeChange(value: String) {
+        _state.update { it.copy(manualLongitudeText = value) }
+        edit { it.copy(longitude = value.toDoubleOrNull()?.takeIf { parsed -> isValidLongitude(parsed) }) }
+    }
+
+    fun onManualAltitudeChange(value: String) {
+        _state.update { it.copy(manualAltitudeText = value) }
+        edit { it.copy(altitude = value.toDoubleOrNull()?.takeIf { parsed -> isValidAltitude(parsed) }) }
+    }
 
     // --- Photo ----------------------------------------------------------------
 
@@ -323,6 +395,23 @@ class SurveyFormViewModel(
             numericError(state.tssText, min = 0.0, max = 100.0, unit = "°Brix")
                 ?.let { errors[Field.TSS] = it }
 
+            if (state.manualLocation) {
+                coordinateError(state.manualLatitudeText, ::isValidLatitude, "latitude", -90, 90)
+                    ?.let { errors[Field.LATITUDE] = it }
+                coordinateError(state.manualLongitudeText, ::isValidLongitude, "longitude", -180, 180)
+                    ?.let { errors[Field.LONGITUDE] = it }
+                coordinateError(state.manualAltitudeText, ::isValidAltitude, "altitude", -500, 9000)
+                    ?.let { errors[Field.ALTITUDE] = it }
+
+                // One coordinate on its own does not locate anything.
+                val hasLatitude = state.manualLatitudeText.isNotBlank()
+                val hasLongitude = state.manualLongitudeText.isNotBlank()
+                if (hasLatitude != hasLongitude) {
+                    val missing = if (hasLatitude) Field.LONGITUDE else Field.LATITUDE
+                    errors[missing] = "Enter both latitude and longitude, or leave both blank"
+                }
+            }
+
             if (survey.fruitShape == FruitShape.OTHER.storageValue &&
                 survey.fruitShapeOther.isNullOrBlank()
             ) {
@@ -339,6 +428,29 @@ class SurveyFormViewModel(
             if (value > max) return "Must not exceed $max $unit"
             return null
         }
+
+        fun isValidLatitude(value: Double) = value >= -90.0 && value <= 90.0
+
+        fun isValidLongitude(value: Double) = value >= -180.0 && value <= 180.0
+
+        fun isValidAltitude(value: Double) = value >= -500.0 && value <= 9000.0
+
+        /** Optional coordinate input: blank is fine, out of range is not. */
+        private fun coordinateError(
+            value: String,
+            isValid: (Double) -> Boolean,
+            name: String,
+            min: Int,
+            max: Int
+        ): String? {
+            if (value.isBlank()) return null
+            val parsed = value.toDoubleOrNull() ?: return "Enter a number"
+            if (!isValid(parsed)) return "The $name must be between $min and $max"
+            return null
+        }
+
+        /** Coordinates keep their decimals; 34.0 must not become "34". */
+        fun trimCoordinate(value: Double): String = value.toString()
 
         fun trimNumber(value: Double): String =
             if (value == value.toLong().toDouble()) value.toLong().toString() else value.toString()

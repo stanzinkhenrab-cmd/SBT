@@ -73,6 +73,20 @@ fun Double.toMetres(unit: HeightUnit): Double =
 fun Double.toFeet(unit: HeightUnit): Double =
     if (unit == HeightUnit.FOOT) this else this * HeightUnit.FEET_PER_METRE
 
+/** Where the coordinates on a record came from. */
+enum class LocationSource(val storageValue: String, val label: String) {
+    /** Acquired from the device's location provider. */
+    GPS("gps", "Device GPS"),
+
+    /** Typed in by the surveyor — from a handheld receiver, a map, or an earlier visit. */
+    MANUAL("manual", "Entered manually");
+
+    companion object {
+        fun fromStorage(value: String?): LocationSource =
+            entries.firstOrNull { it.storageValue == value } ?: GPS
+    }
+}
+
 enum class SurveyStatus(val storageValue: String) {
     DRAFT("draft"),
     COMPLETED("completed");

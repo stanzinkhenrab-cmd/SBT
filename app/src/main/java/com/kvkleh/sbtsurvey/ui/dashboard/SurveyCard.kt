@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.EditLocation
 import androidx.compose.material.icons.filled.LocationOff
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.NoPhotography
@@ -127,16 +128,20 @@ fun SurveyCard(
                     onClick = onView,
                     label = {
                         Text(
-                            text = if (survey.hasGps) "GPS ✓" else "No GPS",
+                            text = when {
+                                survey.hasGps && survey.isManualLocation -> "Manual ✓"
+                                survey.hasGps -> "GPS ✓"
+                                else -> "No GPS"
+                            },
                             style = MaterialTheme.typography.labelMedium
                         )
                     },
                     leadingIcon = {
                         Icon(
-                            imageVector = if (survey.hasGps) {
-                                Icons.Filled.LocationOn
-                            } else {
-                                Icons.Filled.LocationOff
+                            imageVector = when {
+                                survey.hasGps && survey.isManualLocation -> Icons.Filled.EditLocation
+                                survey.hasGps -> Icons.Filled.LocationOn
+                                else -> Icons.Filled.LocationOff
                             },
                             contentDescription = null,
                             modifier = Modifier.size(18.dp)

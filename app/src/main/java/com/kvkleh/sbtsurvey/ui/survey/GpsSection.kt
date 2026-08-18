@@ -26,7 +26,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,9 +43,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.kvkleh.sbtsurvey.data.local.SurveyEntity
+import com.kvkleh.sbtsurvey.domain.LocationSource
 import com.kvkleh.sbtsurvey.location.GpsState
 import com.kvkleh.sbtsurvey.location.GpsStatus
 import com.kvkleh.sbtsurvey.ui.components.Fmt
+import com.kvkleh.sbtsurvey.ui.components.SbtNumberField
 import com.kvkleh.sbtsurvey.ui.components.SectionCard
 import com.kvkleh.sbtsurvey.ui.theme.StatusOff
 import com.kvkleh.sbtsurvey.ui.theme.StatusOk
@@ -60,10 +65,17 @@ import com.kvkleh.sbtsurvey.ui.theme.StatusWarn
 @Composable
 fun GpsSection(
     gps: GpsState,
+    survey: SurveyEntity,
+    state: SurveyFormUiState,
     onGetLocation: () -> Unit,
     onRefresh: () -> Unit,
+    onManualToggled: (Boolean) -> Unit,
+    onLatitudeChange: (String) -> Unit,
+    onLongitudeChange: (String) -> Unit,
+    onAltitudeChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val manual = state.manualLocation
     var permissionAsked by remember { mutableStateOf(false) }
     var permissionPermanentlyDenied by remember { mutableStateOf(false) }
 
@@ -93,7 +105,8 @@ fun GpsSection(
 
     // Start looking as soon as the section appears, so a fix is usually ready by the time
     // the surveyor has finished typing the village name.
-    LaunchedEffect(Unit) {
+    LaunchedEffect(manual) {
+        if (manual) return@LaunchedEffect
         if (gps.status == GpsStatus.IDLE || gps.status == GpsStatus.PERMISSION_REQUIRED) {
             permissionLauncher.launch(
                 arrayOf(
@@ -107,28 +120,37 @@ fun GpsSection(
     SectionCard(
         title = "GPS & Elevation",
         number = 4,
-        subtitle = "Recorded automatically from the device",
+        subtitle = if (manual) {
+            "Entered manually"
+        } else {
+            "Recorded automatically from the device"
+        },
         modifier = modifier
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier
-                    .size(12.dp)
-                    .clip(CircleShape)
-                    .background(statusColor(gps.status))
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(
-                text = "GPS Status: ${gps.statusLabel}",
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(Modifier.weight(1f))
-            if (gps.searching) {
-                CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.5.dp)
+        if (!manual) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(12.dp)
+                        .clip(CircleShape)
+                        .background(statusColor(gps.status))
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = "GPS Status: ${gps.statusLabel}",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Spacer(Modifier.weight(1f))
+                if (gps.searching) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        strokeWidth = 2.5.dp
+                    )
+                }
             }
         }
 
-        if (gps.searching) {
+        if (gps.searching && !manual) {
             Column {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 Spacer(Modifier.height(6.dp))
@@ -141,7 +163,6 @@ fun GpsSection(
             }
         }
 
-        val fix = gps.fix
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -150,14 +171,21 @@ fun GpsSection(
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            GpsValueRow("Latitude", Fmt.coordinate(fix?.latitude))
-            GpsValueRow("Longitude", Fmt.coordinate(fix?.longitude))
-            GpsValueRow("Altitude", Fmt.metres(fix?.altitude))
-            GpsValueRow("Accuracy", Fmt.accuracy(fix?.accuracy))
-            GpsValueRow("Acquired at", Fmt.dateTime(fix?.timestamp))
+            GpsValueRow("Latitude", Fmt.coordinate(survey.latitude))
+            GpsValueRow("Longitude", Fmt.coordinate(survey.longitude))
+            GpsValueRow("Altitude", Fmt.metres(survey.altitude))
+            GpsValueRow(
+                label = "Accuracy",
+                value = if (manual) "Not applicable" else Fmt.accuracy(survey.gpsAccuracy)
+            )
+            GpsValueRow(
+                label = if (manual) "Entered at" else "Acquired at",
+                value = Fmt.dateTime(survey.gpsTimestamp)
+            )
+            GpsValueRow("Source", LocationSource.fromStorage(survey.locationSource).label)
         }
 
-        gps.message?.let { message ->
+        if (!manual) gps.message?.let { message ->
             Text(
                 text = message,
                 style = MaterialTheme.typography.bodyMedium,
@@ -171,7 +199,7 @@ fun GpsSection(
             )
         }
 
-        if (permissionPermanentlyDenied && !gps.hasFix) {
+        if (permissionPermanentlyDenied && !gps.hasFix && !manual) {
             Text(
                 text = "Location permission was declined. Coordinates will be left blank; " +
                     "you can still complete and save the survey. Grant location access in " +
@@ -181,7 +209,7 @@ fun GpsSection(
             )
         }
 
-        FlowRow(
+        if (!manual) FlowRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -204,9 +232,66 @@ fun GpsSection(
             }
         }
 
-        if (gps.hasFix) {
+        if (gps.hasFix && !manual) {
             Text(
                 text = "The best reading is kept. Refresh GPS replaces it with a new one.",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        HorizontalDivider()
+
+        // Manual entry, for a handheld receiver reading, a position taken off a map, or a
+        // point recorded on an earlier visit. Optional throughout.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Enter coordinates manually",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    text = "Optional. Use when GPS is unavailable or you already have the " +
+                        "position from another instrument.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Switch(checked = manual, onCheckedChange = onManualToggled)
+        }
+
+        if (manual) {
+            SbtNumberField(
+                label = "Latitude",
+                value = state.manualLatitudeText,
+                onValueChange = onLatitudeChange,
+                suffix = "decimal degrees",
+                supportingText = "Example: 34.152588  ·  north is positive",
+                errorText = state.errors[Field.LATITUDE],
+                allowNegative = true
+            )
+            SbtNumberField(
+                label = "Longitude",
+                value = state.manualLongitudeText,
+                onValueChange = onLongitudeChange,
+                suffix = "decimal degrees",
+                supportingText = "Example: 77.577049  ·  east is positive",
+                errorText = state.errors[Field.LONGITUDE],
+                allowNegative = true
+            )
+            SbtNumberField(
+                label = "Altitude",
+                value = state.manualAltitudeText,
+                onValueChange = onAltitudeChange,
+                suffix = "m",
+                supportingText = "Example: 3500  ·  metres above sea level",
+                errorText = state.errors[Field.ALTITUDE],
+                allowNegative = true
+            )
+            Text(
+                text = "Coordinates are WGS 84 decimal degrees, the same system the device " +
+                    "GPS uses. Turn this off to go back to the device reading.",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

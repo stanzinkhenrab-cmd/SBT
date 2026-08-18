@@ -188,8 +188,14 @@ fun SurveyFormScreen(
             item {
                 GpsSection(
                     gps = gps,
+                    survey = survey,
+                    state = state,
                     onGetLocation = viewModel::onGetLocation,
-                    onRefresh = viewModel::onRefreshLocation
+                    onRefresh = viewModel::onRefreshLocation,
+                    onManualToggled = viewModel::onManualLocationToggled,
+                    onLatitudeChange = viewModel::onManualLatitudeChange,
+                    onLongitudeChange = viewModel::onManualLongitudeChange,
+                    onAltitudeChange = viewModel::onManualAltitudeChange
                 )
             }
             item { ShrubSection(survey, state, viewModel) }

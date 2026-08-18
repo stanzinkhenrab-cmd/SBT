@@ -68,6 +68,54 @@ class ExportWritersTest {
     }
 
     @Test
+    fun `manually entered coordinates are distinguished in the export`() {
+        val typed = sample().copy(
+            surveyId = "SBT-2026-0002",
+            gpsAccuracy = null,
+            locationSource = "manual"
+        )
+        val out = ByteArrayOutputStream()
+        CsvWriter.write(listOf(sample(), typed), out)
+        val rows = out.toString("UTF-8").trim().lines()
+
+        val sourceColumn = SurveyColumns.headers.indexOf("Coordinate Source")
+        assertTrue("column is missing", sourceColumn >= 0)
+        assertEquals("Device GPS", splitCsv(rows[1])[sourceColumn])
+        assertEquals("Entered manually", splitCsv(rows[2])[sourceColumn])
+    }
+
+    /**
+     * Splits one CSV record, honouring quoted fields.
+     *
+     * A plain `split(",")` would be fooled by a surveyor name such as "Tsering, Dolma",
+     * which is exactly the case the writer has to get right.
+     */
+    private fun splitCsv(line: String): List<String> {
+        val fields = mutableListOf<String>()
+        val current = StringBuilder()
+        var inQuotes = false
+        var index = 0
+        while (index < line.length) {
+            val character = line[index]
+            when {
+                character == '"' && inQuotes && index + 1 < line.length && line[index + 1] == '"' -> {
+                    current.append('"')
+                    index++
+                }
+                character == '"' -> inQuotes = !inQuotes
+                character == ',' && !inQuotes -> {
+                    fields += current.toString()
+                    current.clear()
+                }
+                else -> current.append(character)
+            }
+            index++
+        }
+        fields += current.toString()
+        return fields
+    }
+
+    @Test
     fun `spreadsheet column names continue past Z`() {
         assertEquals("A", XlsxWriter.columnName(0))
         assertEquals("Z", XlsxWriter.columnName(25))

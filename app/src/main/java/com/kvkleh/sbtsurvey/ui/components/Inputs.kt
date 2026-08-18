@@ -101,18 +101,30 @@ fun SbtNumberField(
     required: Boolean = false,
     errorText: String? = null,
     supportingText: String? = null,
-    suffix: String? = null
+    suffix: String? = null,
+    /** Southern latitudes, western longitudes and below-sea-level altitudes need a sign. */
+    allowNegative: Boolean = false
 ) {
     SbtTextField(
         label = if (suffix != null) "$label ($suffix)" else label,
         value = value,
-        onValueChange = { new -> onValueChange(new.filter { it.isDigit() || it == '.' }) },
+        onValueChange = { new -> onValueChange(sanitiseNumber(new, allowNegative)) },
         modifier = modifier,
         required = required,
         errorText = errorText,
         supportingText = supportingText,
         keyboardType = KeyboardType.Decimal
     )
+}
+
+/**
+ * Keeps only what can form a decimal number, and allows at most one leading sign.
+ * Partial input such as "-" or "12." is preserved so the field can still be typed into.
+ */
+private fun sanitiseNumber(input: String, allowNegative: Boolean): String {
+    val negative = allowNegative && input.startsWith("-")
+    val digits = input.filter { it.isDigit() || it == '.' }
+    return if (negative) "-$digits" else digits
 }
 
 /**
