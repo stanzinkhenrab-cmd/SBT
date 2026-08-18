@@ -1,9 +1,38 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
 }
+
+/**
+ * Release signing material, if it has been provided.
+ *
+ * Looked up from `keystore.properties` in the module directory first (local builds), then
+ * from environment variables (CI). When nothing is configured the release build is left
+ * unsigned and the debug APK — which Android will happily install — is what gets
+ * published instead. No signing material is ever committed.
+ */
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+
+fun signingValue(key: String, environmentVariable: String): String? =
+    keystoreProperties.getProperty(key) ?: System.getenv(environmentVariable)
+
+val releaseStoreFile: String? = signingValue("storeFile", "SBT_KEYSTORE_FILE")
+val releaseStorePassword: String? = signingValue("storePassword", "SBT_KEYSTORE_PASSWORD")
+val releaseKeyAlias: String? = signingValue("keyAlias", "SBT_KEY_ALIAS")
+val releaseKeyPassword: String? = signingValue("keyPassword", "SBT_KEY_PASSWORD")
+
+val hasReleaseSigning: Boolean = !releaseStoreFile.isNullOrBlank() &&
+    !releaseStorePassword.isNullOrBlank() &&
+    !releaseKeyAlias.isNullOrBlank() &&
+    !releaseKeyPassword.isNullOrBlank() &&
+    rootProject.file(releaseStoreFile!!).exists()
 
 android {
     namespace = "com.kvkleh.sbtsurvey"
@@ -26,6 +55,17 @@ android {
         }
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = rootProject.file(releaseStoreFile!!)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
@@ -33,6 +73,9 @@ android {
             isMinifyEnabled = false
         }
         release {
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

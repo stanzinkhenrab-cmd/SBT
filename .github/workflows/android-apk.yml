@@ -1,0 +1,140 @@
+name: Build APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - 'claude/**'
+    tags:
+      - 'v*'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and publish APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up the Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Read the application version
+        id: version
+        run: |
+          VERSION=$(grep -m1 'versionName' app/build.gradle.kts | sed -E 's/.*"(.*)".*/\1/')
+          echo "name=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Application version: ${VERSION}"
+
+      - name: Run unit tests
+        run: ./gradlew --no-daemon testDebugUnitTest
+
+      - name: Build the debug APK
+        run: ./gradlew --no-daemon assembleDebug
+
+      # Release signing is optional. Configure the four repository secrets below to get a
+      # signed release build; without them the workflow publishes the debug APK, which
+      # Android installs just as happily.
+      - name: Restore the release keystore
+        id: keystore
+        if: ${{ secrets.SBT_KEYSTORE_BASE64 != '' }}
+        env:
+          SBT_KEYSTORE_BASE64: ${{ secrets.SBT_KEYSTORE_BASE64 }}
+        run: |
+          echo "$SBT_KEYSTORE_BASE64" | base64 --decode > release-keystore.jks
+          echo "available=true" >> "$GITHUB_OUTPUT"
+
+      - name: Build the release APK
+        if: ${{ steps.keystore.outputs.available == 'true' }}
+        env:
+          SBT_KEYSTORE_FILE: release-keystore.jks
+          SBT_KEYSTORE_PASSWORD: ${{ secrets.SBT_KEYSTORE_PASSWORD }}
+          SBT_KEY_ALIAS: ${{ secrets.SBT_KEY_ALIAS }}
+          SBT_KEY_PASSWORD: ${{ secrets.SBT_KEY_PASSWORD }}
+        run: ./gradlew --no-daemon assembleRelease
+
+      - name: Collect the APKs
+        id: collect
+        run: |
+          mkdir -p dist
+          VERSION="${{ steps.version.outputs.name }}"
+
+          # Stable file names, so the rolling release always has the same download URL.
+          DEBUG_APK=$(find app/build/outputs/apk/debug -name '*.apk' | head -1)
+          cp "$DEBUG_APK" "dist/SeabuckthornFieldSurvey-${VERSION}.apk"
+
+          if [ -d app/build/outputs/apk/release ]; then
+            RELEASE_APK=$(find app/build/outputs/apk/release -name '*.apk' | head -1)
+            if [ -n "$RELEASE_APK" ]; then
+              cp "$RELEASE_APK" "dist/SeabuckthornFieldSurvey-${VERSION}-signed.apk"
+            fi
+          fi
+
+          ls -lh dist
+          (cd dist && sha256sum *.apk > SHA256SUMS.txt && cat SHA256SUMS.txt)
+
+      - name: Upload the APKs as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: seabuckthorn-field-survey-apk
+          path: dist/*
+          retention-days: 90
+          if-no-files-found: error
+
+      # A rolling prerelease so field staff always have one stable download link, and a
+      # permanent release for every tagged version.
+      - name: Publish the rolling "latest" release
+        if: ${{ github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/') }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest build – Seabuckthorn Field Survey
+          prerelease: true
+          body: |
+            Latest automatic build of **Seabuckthorn Field Survey – Ladakh**.
+
+            Krishi Vigyan Kendra – Leh, Ladakh · MIDH-SBM
+            Developed by Stanzin Khenrab
+
+            Built from `${{ github.ref_name }}` at commit `${{ github.sha }}`.
+
+            **To install:** download the `.apk` below on the Android phone or tablet, open
+            it, and allow installation from this source when prompted. No internet
+            connection is needed after installation.
+          files: dist/*
+
+      - name: Publish the tagged release
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Seabuckthorn Field Survey ${{ github.ref_name }}
+          body: |
+            **Seabuckthorn Field Survey – Ladakh** ${{ github.ref_name }}
+
+            Krishi Vigyan Kendra – Leh, Ladakh · MIDH-SBM
+            Developed by Stanzin Khenrab
+
+            **To install:** download the `.apk` below on the Android phone or tablet, open
+            it, and allow installation from this source when prompted. The app works
+            entirely offline once installed.
+          files: dist/*

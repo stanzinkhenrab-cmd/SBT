@@ -54,6 +54,49 @@ Welcome  →  Dashboard  →  Survey Form  →  Save & Finish  →  Thank You  �
 Surveyor Information (name, designation, organization) sits above section 1 and is stored
 on every record.
 
+## Download the app
+
+Every push builds an APK through GitHub Actions and attaches it to the rolling
+**[Latest build](../../releases/tag/latest)** release, so field staff always have one
+stable download link. Tagged versions (`v1.0.0`, …) get their own permanent release.
+
+To install on a phone or tablet:
+
+1. Open the release page on the device and download the `.apk`.
+2. Open the downloaded file.
+3. Allow installation from this source when Android asks.
+
+No internet connection is needed once the app is installed.
+
+The APK is also attached to each workflow run under **Actions → Build APK → Artifacts**,
+which is useful for testing a specific commit.
+
+### Signed release builds (optional)
+
+Without signing secrets the workflow publishes the debug-signed APK, which Android
+installs normally. To publish a properly signed release build instead, create a keystore
+and add four repository secrets:
+
+| Secret | Value |
+|---|---|
+| `SBT_KEYSTORE_BASE64` | `base64 -w0 release-keystore.jks` |
+| `SBT_KEYSTORE_PASSWORD` | Keystore password |
+| `SBT_KEY_ALIAS` | Key alias |
+| `SBT_KEY_PASSWORD` | Key password |
+
+For local release builds, put the same values in a `keystore.properties` file at the
+repository root (it is git-ignored):
+
+```properties
+storeFile=release-keystore.jks
+storePassword=…
+keyAlias=…
+keyPassword=…
+```
+
+Keep the keystore safe — Android requires every future update to be signed with the same
+key.
+
 ## Building
 
 Requirements: Android Studio Ladybug or newer, JDK 17, Android SDK 35.

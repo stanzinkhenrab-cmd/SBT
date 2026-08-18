@@ -22,6 +22,7 @@ output.json
 *.jks
 *.keystore
 keystore.properties
+release-keystore.jks
 
 # OS
 .DS_Store
