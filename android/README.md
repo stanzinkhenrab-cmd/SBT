@@ -22,6 +22,13 @@ app with four layout templates.
   | Ribbon | Accent-coloured band with a large place name and a QR code. |
   | Polaroid | Adds a printed footer *below* the photo instead of covering any of it. |
 
+- **Or type the position in.** Tap the pin-edit button next to the coordinate chip to enter
+  latitude and longitude by hand — useful when there is no signal, when you are stamping a
+  photo taken somewhere else, or when a survey gives you the exact position. Decimal degrees
+  (`34.998600`) and DMS (`34°59'55"N`) both work, a hemisphere letter can stand in for the
+  minus sign, and pasting a `lat, long` pair into the first box fills in both. Altitude is
+  optional. Applying the coordinates re-runs the geocoder, so the place name, address, map
+  thumbnail and QR link all follow.
 - **Tune it.** Edit the place, address and note; toggle the map, QR, coordinates, date and
   note lines; switch between decimal and DMS coordinates; pick an accent colour; scale the
   card; change the map zoom.

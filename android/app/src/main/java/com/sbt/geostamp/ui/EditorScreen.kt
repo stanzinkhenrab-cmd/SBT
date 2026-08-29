@@ -22,10 +22,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.EditLocationAlt
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AssistChip
-import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -39,7 +39,12 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,11 +52,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.sbt.geostamp.model.Coordinates
 import com.sbt.geostamp.model.StampContent
 import com.sbt.geostamp.model.StampOptions
 import com.sbt.geostamp.model.Template
 import androidx.compose.foundation.Image
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -61,6 +69,7 @@ fun EditorScreen(
     onSave: () -> Unit,
     onShare: () -> Unit,
     onRefreshLocation: () -> Unit,
+    onApplyCoordinates: (Double, Double, Double?) -> Unit,
     onContentChange: ((StampContent) -> StampContent) -> Unit,
     onOptionsChange: ((StampOptions) -> StampOptions) -> Unit,
     modifier: Modifier = Modifier
@@ -97,9 +106,10 @@ fun EditorScreen(
                 onOptionsChange { it.copy(template = template) }
             }
 
-            LocationRow(
+            LocationSection(
                 state = state,
-                onRefreshLocation = onRefreshLocation
+                onRefreshLocation = onRefreshLocation,
+                onApplyCoordinates = onApplyCoordinates
             )
 
             OutlinedTextField(
@@ -250,33 +260,168 @@ private fun TemplateRow(selected: Template, onSelect: (Template) -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun LocationRow(state: EditorState, onRefreshLocation: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        val label = when {
-            state.isLocating -> "Getting a fix…"
-            state.content.hasLocation -> state.content.formattedCoordinates(false)
-            else -> "No location yet"
-        }
-        AssistChip(
-            onClick = onRefreshLocation,
-            enabled = !state.isLocating,
-            label = { Text(label, maxLines = 1) },
-            leadingIcon = {
-                if (state.isLocating) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                } else {
-                    Icon(Icons.Default.MyLocation, contentDescription = null)
+private fun LocationSection(
+    state: EditorState,
+    onRefreshLocation: () -> Unit,
+    onApplyCoordinates: (Double, Double, Double?) -> Unit
+) {
+    var manualOpen by remember { mutableStateOf(false) }
+    var latitudeText by remember { mutableStateOf("") }
+    var longitudeText by remember { mutableStateOf("") }
+    var altitudeText by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            val label = when {
+                state.isLocating -> "Getting a fix…"
+                state.content.hasLocation -> state.content.formattedCoordinates(false)
+                else -> "No location yet"
+            }
+            AssistChip(
+                onClick = onRefreshLocation,
+                enabled = !state.isLocating,
+                label = { Text(label, maxLines = 1) },
+                leadingIcon = {
+                    if (state.isLocating) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(Icons.Default.MyLocation, contentDescription = null)
+                    }
+                },
+                modifier = Modifier.weight(1f)
+            )
+            IconButton(
+                onClick = {
+                    if (!manualOpen) {
+                        // Start from whatever the stamp currently shows.
+                        latitudeText = state.content.latitude?.let { format(it) } ?: ""
+                        longitudeText = state.content.longitude?.let { format(it) } ?: ""
+                        altitudeText = state.content.altitudeMeters?.let { format(it, 1) } ?: ""
+                        error = null
+                    }
+                    manualOpen = !manualOpen
                 }
-            },
-            colors = AssistChipDefaults.assistChipColors(),
-            modifier = Modifier.weight(1f)
-        )
+            ) {
+                Icon(
+                    Icons.Default.EditLocationAlt,
+                    contentDescription = if (manualOpen) "Hide manual entry" else "Enter coordinates manually"
+                )
+            }
+        }
+
+        if (manualOpen) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    "Type coordinates, or paste a \"lat, long\" pair into the first box. " +
+                        "Decimal degrees and 34°59'55\"N both work.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                OutlinedTextField(
+                    value = latitudeText,
+                    onValueChange = { value ->
+                        // Several characters arriving at once means a paste, not typing —
+                        // only then do we offer to split a "lat, long" pair across both boxes.
+                        val pasted = value.length - latitudeText.length > 1
+                        latitudeText = value
+                        error = null
+                        if (pasted) {
+                            Coordinates.parsePair(value)?.let { (latitude, longitude) ->
+                                latitudeText = format(latitude)
+                                longitudeText = format(longitude)
+                            }
+                        }
+                    },
+                    label = { Text("Latitude") },
+                    placeholder = { Text("34.998600") },
+                    singleLine = true,
+                    isError = error != null && Coordinates.parseLatitude(latitudeText) == null,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = longitudeText,
+                    onValueChange = { value ->
+                        longitudeText = value
+                        error = null
+                    },
+                    label = { Text("Longitude") },
+                    placeholder = { Text("77.383358") },
+                    singleLine = true,
+                    isError = error != null && Coordinates.parseLongitude(longitudeText) == null,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = altitudeText,
+                    onValueChange = { value ->
+                        altitudeText = value
+                        error = null
+                    },
+                    label = { Text("Altitude in metres (optional)") },
+                    placeholder = { Text("3132") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                error?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = { manualOpen = false },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Cancel")
+                    }
+                    Button(
+                        onClick = {
+                            val latitude = Coordinates.parseLatitude(latitudeText)
+                            val longitude = Coordinates.parseLongitude(longitudeText)
+                            val altitude = altitudeText.trim()
+                                .takeIf { it.isNotEmpty() }
+                                ?.replace(',', '.')
+                                ?.toDoubleOrNull()
+                            when {
+                                latitude == null ->
+                                    error = "Latitude must be between -90 and 90."
+                                longitude == null ->
+                                    error = "Longitude must be between -180 and 180."
+                                altitudeText.isNotBlank() && altitude == null ->
+                                    error = "Altitude must be a number in metres."
+                                else -> {
+                                    onApplyCoordinates(latitude, longitude, altitude)
+                                    manualOpen = false
+                                }
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text("Apply")
+                    }
+                }
+            }
+        }
     }
 }
+
+private fun format(value: Double, decimals: Int = 6): String =
+    String.format(Locale.US, "%.${decimals}f", value)
 
 @Composable
 private fun ToggleRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {

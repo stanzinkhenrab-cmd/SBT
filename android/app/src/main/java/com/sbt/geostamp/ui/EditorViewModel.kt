@@ -132,17 +132,52 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    private suspend fun describe(latitude: Double, longitude: Double) {
+    /**
+     * Fills in the place name and address for a coordinate pair. [overwriteTitle] is set when
+     * the user has just moved the location on purpose, so a stale name does not stick around.
+     */
+    private suspend fun describe(
+        latitude: Double,
+        longitude: Double,
+        overwriteTitle: Boolean = false
+    ) {
         val place = addressResolver.resolve(latitude, longitude)
         _state.update { current ->
-            val title = place?.title?.takeIf { it.isNotBlank() }
-                ?: current.content.formattedCoordinates(current.options.coordinatesAsDms)
+            val fallback = current.content.formattedCoordinates(current.options.coordinatesAsDms)
+            val resolved = place?.title?.takeIf { it.isNotBlank() } ?: fallback
+            val keepTitle = current.content.title.isNotBlank() && !overwriteTitle
             current.copy(
                 content = current.content.copy(
-                    title = if (current.content.title.isBlank()) title else current.content.title,
+                    title = if (keepTitle) current.content.title else resolved,
                     addressLine = place?.addressLine ?: current.content.addressLine
                 )
             )
+        }
+    }
+
+    /**
+     * Applies coordinates the user typed in by hand. The map, QR link and address all follow
+     * from these, so everything downstream is refreshed.
+     */
+    fun applyManualLocation(latitude: Double, longitude: Double, altitudeMeters: Double?) {
+        viewModelScope.launch {
+            mapCacheKey = null
+            _state.update {
+                it.copy(
+                    locationDenied = false,
+                    isLocating = false,
+                    content = it.content.copy(
+                        latitude = latitude,
+                        longitude = longitude,
+                        altitudeMeters = altitudeMeters,
+                        // A hand-typed position has no measured accuracy to report.
+                        accuracyMeters = null
+                    )
+                )
+            }
+            requestRender(immediate = true)
+            describe(latitude, longitude, overwriteTitle = true)
+            requestRender(immediate = true)
         }
     }
 

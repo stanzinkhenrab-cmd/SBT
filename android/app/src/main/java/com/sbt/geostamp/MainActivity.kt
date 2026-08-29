@@ -166,6 +166,7 @@ private fun GeoStampRoot(sharedImage: Uri?) {
                 onRefreshLocation = {
                     if (state.locationDenied) askForLocation() else viewModel.refreshLocation()
                 },
+                onApplyCoordinates = viewModel::applyManualLocation,
                 onContentChange = viewModel::updateContent,
                 onOptionsChange = viewModel::updateOptions,
                 modifier = Modifier.padding(padding)
