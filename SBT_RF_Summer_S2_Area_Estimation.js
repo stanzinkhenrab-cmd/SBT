@@ -168,13 +168,50 @@ var sbtGT = ee.FeatureCollection(
   'projects/ee-stanzin-soil/assets/SBTV2'
 );
 
+// ---------------------------------------------------------------------
+// REBUILD GT POINT GEOMETRY FROM THE Latitude / Longitude COLUMNS
+// The source CSV (SBTV2.csv) has columns:
+//   Latitude, Longitude, Altitude (m), GPS Accuracy (m)
+// and 1,004 of its 1,282 points lie inside the ROI. The geometry stored in
+// the ingested asset does not match these coordinates (e.g. columns
+// assigned to the wrong axis or no geometry at upload), so filterBounds()
+// on the stored geometry returns 0. Each point is therefore rebuilt as
+// Point([Longitude, Latitude]) in WGS84 from the attribute columns.
+// Set gtUseCoordinateColumns = false to use the stored asset geometry.
+// ---------------------------------------------------------------------
+var gtUseCoordinateColumns = true;
+var gtLatitudeField = 'Latitude';
+var gtLongitudeField = 'Longitude';
+
+function toNumber(value) {
+  return ee.Number(ee.Algorithms.If(
+    ee.Algorithms.IsEqual(ee.Algorithms.ObjectType(value), 'String'),
+    ee.Number.parse(ee.String(value).trim()),
+    value));
+}
+
+var sbtGTPoints = gtUseCoordinateColumns
+  ? sbtGT
+      .filter(ee.Filter.notNull([gtLatitudeField, gtLongitudeField]))
+      .map(function(f) {
+        var lon = toNumber(f.get(gtLongitudeField));
+        var lat = toNumber(f.get(gtLatitudeField));
+        return ee.Feature(ee.Geometry.Point([lon, lat]), f.toDictionary());
+      })
+  : sbtGT;
+
 // Only GT points inside the ROI are used anywhere in this script.
-var sbtGTInRoi = sbtGT.filterBounds(roi);
+var sbtGTInRoi = sbtGTPoints.filterBounds(roi);
 
 print('=============== GROUND TRUTH ===============');
 print('Total SBT GT points in asset:', sbtGT.size());
 print('SBT GT points inside ROI:', sbtGTInRoi.size());
 print('SBT GT points outside ROI (ignored):', sbtGT.size().subtract(sbtGTInRoi.size()));
+print('GT coordinates taken from:', gtUseCoordinateColumns
+  ? "attribute columns '" + gtLongitudeField + "' / '" + gtLatitudeField + "'"
+  : 'stored asset geometry');
+print('GT asset — attribute names:', ee.Feature(sbtGT.first()).propertyNames());
+print('GT asset — first feature as stored (check its geometry):', sbtGT.first());
 
 
 // =====================================================================
@@ -792,7 +829,7 @@ Map.addLayer(classified, classVis, 'Classification at threshold ' + probabilityT
 Map.addLayer(finalSbtMask.selfMask(), {palette: ['FF00FF']},
   '8. FINAL SBT MASK' + (applyPostProcessing ? ' (post-processed)' : ''));
 
-Map.addLayer(sbtGT, {color: 'FFFF00'}, '5a. All SBT GT points (asset)', false);
+Map.addLayer(sbtGTPoints, {color: 'FFFF00'}, '5a. All SBT GT points (from Latitude/Longitude)', false);
 Map.addLayer(sbtGTInRoi, {color: '00FFFF'}, '5b. SBT GT points inside ROI');
 Map.addLayer(backgroundSamplesFc, {color: 'FFA500'}, '6. Pseudo-negative/background points', false);
 
