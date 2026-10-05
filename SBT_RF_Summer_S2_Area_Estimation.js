@@ -177,11 +177,18 @@ var sbtGT = ee.FeatureCollection(
 // assigned to the wrong axis or no geometry at upload), so filterBounds()
 // on the stored geometry returns 0. Each point is therefore rebuilt as
 // Point([Longitude, Latitude]) in WGS84 from the attribute columns.
-// Set gtUseCoordinateColumns = false to use the stored asset geometry.
+// Works with both the original asset (columns 'Latitude'/'Longitude') and
+// a re-upload of data/SBTV2_GEE_upload.csv (columns 'latitude'/'longitude').
+// Features without these columns keep their stored geometry.
+// Set gtUseCoordinateColumns = false to use the stored asset geometry only.
 // ---------------------------------------------------------------------
 var gtUseCoordinateColumns = true;
-var gtLatitudeField = 'Latitude';
-var gtLongitudeField = 'Longitude';
+
+var gtFirstProps = ee.Feature(sbtGT.first()).propertyNames();
+var gtLatitudeField = ee.String(ee.Algorithms.If(
+  gtFirstProps.contains('Latitude'), 'Latitude', 'latitude'));
+var gtLongitudeField = ee.String(ee.Algorithms.If(
+  gtFirstProps.contains('Longitude'), 'Longitude', 'longitude'));
 
 function toNumber(value) {
   return ee.Number(ee.Algorithms.If(
@@ -191,13 +198,15 @@ function toNumber(value) {
 }
 
 var sbtGTPoints = gtUseCoordinateColumns
-  ? sbtGT
-      .filter(ee.Filter.notNull([gtLatitudeField, gtLongitudeField]))
-      .map(function(f) {
-        var lon = toNumber(f.get(gtLongitudeField));
-        var lat = toNumber(f.get(gtLatitudeField));
-        return ee.Feature(ee.Geometry.Point([lon, lat]), f.toDictionary());
-      })
+  ? sbtGT.map(function(f) {
+      var lat = f.get(gtLatitudeField);
+      var lon = f.get(gtLongitudeField);
+      return ee.Feature(ee.Algorithms.If(
+        ee.Algorithms.IsEqual(lat, null), f,
+        ee.Algorithms.If(
+          ee.Algorithms.IsEqual(lon, null), f,
+          ee.Feature(ee.Geometry.Point([toNumber(lon), toNumber(lat)]), f.toDictionary()))));
+    })
   : sbtGT;
 
 // Only GT points inside the ROI are used anywhere in this script.
@@ -208,7 +217,7 @@ print('Total SBT GT points in asset:', sbtGT.size());
 print('SBT GT points inside ROI:', sbtGTInRoi.size());
 print('SBT GT points outside ROI (ignored):', sbtGT.size().subtract(sbtGTInRoi.size()));
 print('GT coordinates taken from:', gtUseCoordinateColumns
-  ? "attribute columns '" + gtLongitudeField + "' / '" + gtLatitudeField + "'"
+  ? ee.String('attribute columns ').cat(gtLongitudeField).cat(' / ').cat(gtLatitudeField)
   : 'stored asset geometry');
 print('GT asset — attribute names:', ee.Feature(sbtGT.first()).propertyNames());
 print('GT asset — first feature as stored (check its geometry):', sbtGT.first());
