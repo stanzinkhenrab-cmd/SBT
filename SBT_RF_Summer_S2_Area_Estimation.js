@@ -168,100 +168,13 @@ var sbtGT = ee.FeatureCollection(
   'projects/ee-stanzin-soil/assets/SBTV2'
 );
 
-// ---------------------------------------------------------------------
-// GT GEOMETRY REPAIR
-// A plain filterBounds(roi) returns 0 points when the uploaded table has
-// (a) latitude/longitude stored in the wrong axis order (point at
-//     lon ≈ 34–35, lat ≈ 76–77, i.e. far outside Ladakh), or
-// (b) no usable geometry (CSV uploaded without lat/lon columns being
-//     recognised; coordinates are only in the attribute table), or
-// (c) geometry in a non-WGS84 CRS.
-// Each GT feature is therefore rebuilt as a WGS84 point, trying in order:
-//   1. the stored geometry
-//   2. the stored geometry with lat/lon swapped
-//   3. latitude/longitude attribute columns
-//   4. latitude/longitude attribute columns swapped
-// The first candidate that falls inside the ROI is kept; otherwise the
-// feature keeps its original position (and is excluded as outside ROI).
-// The source used is stored in 'gt_xy_source' and summarised below.
-// ---------------------------------------------------------------------
-function caseVariants(names) {
-  var out = [];
-  names.forEach(function(n) {
-    [n, n.toLowerCase(), n.toUpperCase(),
-     n.charAt(0).toUpperCase() + n.slice(1).toLowerCase()].forEach(function(v) {
-      if (out.indexOf(v) < 0) { out.push(v); }
-    });
-  });
-  return out;
-}
-var lonFieldCandidates = caseVariants(
-  ['longitude', 'long', 'lon', 'lng', 'x', 'point_x', 'x_coord', 'xcoord', 'gps_lon', 'gps_long', 'longitude_e']);
-var latFieldCandidates = caseVariants(
-  ['latitude', 'lat', 'y', 'point_y', 'y_coord', 'ycoord', 'gps_lat', 'latitude_n']);
-
-function toNumber(value) {
-  return ee.Number(ee.Algorithms.If(
-    ee.Algorithms.IsEqual(ee.Algorithms.ObjectType(value), 'String'),
-    ee.Number.parse(ee.String(value).trim()),
-    value));
-}
-function xyInRoi(xy) {
-  xy = ee.List(xy);
-  var x = ee.Number(xy.get(0)), y = ee.Number(xy.get(1));
-  return x.gte(roiWest).and(x.lte(roiEast)).and(y.gte(roiSouth)).and(y.lte(roiNorth));
-}
-function swapXY(xy) {
-  xy = ee.List(xy);
-  return ee.List([xy.get(1), xy.get(0)]);
-}
-
-function repairGTFeature(f) {
-  f = ee.Feature(f);
-  var geom = f.geometry();
-  var propNames = f.propertyNames();
-  var lonKeys = ee.List(lonFieldCandidates).filter(ee.Filter.inList('item', propNames));
-  var latKeys = ee.List(latFieldCandidates).filter(ee.Filter.inList('item', propNames));
-  var hasGeom = ee.Algorithms.If(geom, 1, 0);
-  var hasCols = lonKeys.size().gt(0).and(latKeys.size().gt(0));
-
-  var noXY = ee.List([-999, -999]);
-  var geomXY = ee.List(ee.Algorithms.If(hasGeom,
-    ee.Geometry(geom).transform('EPSG:4326', 1).centroid(1).coordinates(), noXY));
-  var colXY = ee.List(ee.Algorithms.If(hasCols,
-    ee.List([toNumber(f.get(lonKeys.get(0))), toNumber(f.get(latKeys.get(0)))]), noXY));
-
-  var choice = ee.List(
-    ee.Algorithms.If(xyInRoi(geomXY), ee.List([geomXY, 'geometry']),
-    ee.Algorithms.If(xyInRoi(swapXY(geomXY)), ee.List([swapXY(geomXY), 'geometry_lat_lon_swapped']),
-    ee.Algorithms.If(xyInRoi(colXY), ee.List([colXY, 'lat_lon_columns']),
-    ee.Algorithms.If(xyInRoi(swapXY(colXY)), ee.List([swapXY(colXY), 'lat_lon_columns_swapped']),
-    ee.Algorithms.If(hasGeom, ee.List([geomXY, 'outside_roi']),
-                              ee.List([noXY, 'no_usable_coordinates'])))))));
-
-  var source = ee.String(choice.get(1));
-  var props = f.toDictionary().set('gt_xy_source', source);
-  return ee.Feature(ee.Algorithms.If(
-    source.equals('no_usable_coordinates'),
-    ee.Feature(null, props),
-    ee.Feature(ee.Geometry.Point(ee.List(choice.get(0))), props)));
-}
-
-var sbtGTRepaired = sbtGT.map(repairGTFeature);
-
 // Only GT points inside the ROI are used anywhere in this script.
-var sbtGTInRoi = sbtGTRepaired.filterBounds(roi);
+var sbtGTInRoi = sbtGT.filterBounds(roi);
 
 print('=============== GROUND TRUTH ===============');
 print('Total SBT GT points in asset:', sbtGT.size());
 print('SBT GT points inside ROI:', sbtGTInRoi.size());
 print('SBT GT points outside ROI (ignored):', sbtGT.size().subtract(sbtGTInRoi.size()));
-print('GT coordinate source used (diagnostic):', sbtGTRepaired.aggregate_histogram('gt_xy_source'));
-print('GT asset — attribute names of first feature:', ee.Feature(sbtGT.first()).propertyNames());
-print('GT asset — first feature as stored:', sbtGT.first());
-print('GT repaired — bounding box of all points (check it overlaps the ROI):',
-  sbtGTRepaired.filter(ee.Filter.neq('gt_xy_source', 'no_usable_coordinates'))
-    .geometry().bounds(1));
 
 
 // =====================================================================
@@ -879,8 +792,7 @@ Map.addLayer(classified, classVis, 'Classification at threshold ' + probabilityT
 Map.addLayer(finalSbtMask.selfMask(), {palette: ['FF00FF']},
   '8. FINAL SBT MASK' + (applyPostProcessing ? ' (post-processed)' : ''));
 
-Map.addLayer(sbtGT, {color: 'FFFFFF'}, '5. SBT GT points as stored in asset (unrepaired)', false);
-Map.addLayer(sbtGTRepaired, {color: 'FFFF00'}, '5a. All SBT GT points (asset, geometry-repaired)', false);
+Map.addLayer(sbtGT, {color: 'FFFF00'}, '5a. All SBT GT points (asset)', false);
 Map.addLayer(sbtGTInRoi, {color: '00FFFF'}, '5b. SBT GT points inside ROI');
 Map.addLayer(backgroundSamplesFc, {color: 'FFA500'}, '6. Pseudo-negative/background points', false);
 
