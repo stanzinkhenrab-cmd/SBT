@@ -1,0 +1,2751 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seabuckthorn Location &amp; Elevation Collector — Ladakh</title>
+<meta name="description" content="Multi-point GIS data collection tool for Seabuckthorn (SBT) field surveys in Ladakh. WGS 84 / EPSG:4326.">
+
+<!-- Leaflet (map library) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
+<!-- SheetJS (Excel .xlsx export / import) -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+
+<style>
+:root {
+  --bg: #eef2f4;
+  --panel: #ffffff;
+  --ink: #1b2a33;
+  --muted: #5b6b77;
+  --line: #d6dee4;
+  --head: #12343b;
+  --head2: #1d4e57;
+  --brand: #e8730c;
+  --brand-dark: #c25d05;
+  --teal: #0f766e;
+  --ok: #15803d;
+  --ok-bg: #e7f6ec;
+  --warn: #a16207;
+  --warn-bg: #fef6e0;
+  --err: #b91c1c;
+  --err-bg: #fdecec;
+  --sel: #f97316;
+  --pin-map: #1d4ed8;
+  --pin-gps: #15803d;
+  --pin-imp: #7c3aed;
+  --pin-typed: #0e7490;
+  --pin-edit: #475569;
+  --radius: 10px;
+  --shadow: 0 1px 2px rgba(16,32,40,.06), 0 2px 8px rgba(16,32,40,.06);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+h1, h2, h3 { margin: 0; line-height: 1.2; }
+.muted { color: var(--muted); }
+.hint { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+/* ---------- Header ---------- */
+.app-header {
+  background: linear-gradient(120deg, var(--head), var(--head2));
+  color: #fff;
+  padding: 14px 20px;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 20px;
+}
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.brand-logo {
+  width: 42px; height: 42px; border-radius: 50%; flex: none;
+  background: radial-gradient(circle at 35% 35%, #ffb35c, var(--brand) 55%, var(--brand-dark));
+  box-shadow: inset 0 -3px 6px rgba(0,0,0,.2), 0 0 0 3px rgba(255,255,255,.15);
+  display: grid; place-items: center; font-weight: 800; font-size: 13px; letter-spacing: .5px;
+}
+.app-header h1 { font-size: 20px; font-weight: 700; }
+.app-header .subtitle { margin: 2px 0 0; font-size: 13px; color: #bfe0e3; }
+.pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 999px; font-size: 12px; white-space: nowrap;
+  background: rgba(255,255,255,.12); color: #fff; border: 1px solid rgba(255,255,255,.18);
+}
+.pill .dot { width: 8px; height: 8px; border-radius: 50%; background: #9ca3af; flex: none; }
+.pill.ok .dot { background: #4ade80; }
+.pill.warn .dot { background: #fbbf24; }
+.pill.err .dot { background: #f87171; }
+.pill.busy .dot { background: #60a5fa; animation: pulse 1s infinite; }
+.pill.crs { background: rgba(232,115,12,.25); border-color: rgba(232,115,12,.5); }
+@keyframes pulse { 50% { opacity: .3; } }
+
+/* ---------- Layout ---------- */
+.container { max-width: 1800px; margin: 0 auto; padding: 14px 16px 30px; }
+.panel {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); margin-bottom: 14px;
+}
+.panel-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+  padding: 10px 14px; border-bottom: 1px solid var(--line);
+}
+.panel-head h2 { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.sec-no {
+  display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px;
+  background: var(--head); color: #fff; font-size: 12px; font-weight: 700;
+}
+.panel-body { padding: 12px 14px; }
+.workspace { display: grid; grid-template-columns: minmax(0, 7fr) minmax(310px, 3fr); gap: 14px; align-items: start; }
+.sidebar .panel { margin-bottom: 14px; }
+
+/* ---------- Forms ---------- */
+.meta-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; }
+label.field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; font-weight: 600; color: var(--muted); }
+input[type=text], input[type=number], input[type=password], input:not([type]), select, textarea {
+  border: 1px solid var(--line); border-radius: 7px; padding: 7px 9px; background: #fff; min-width: 0; width: 100%;
+  color: var(--ink); font-weight: 400;
+}
+input:focus, select:focus, textarea:focus { outline: 2px solid rgba(232,115,12,.35); border-color: var(--brand); }
+.chk { display: flex; align-items: center; gap: 7px; font-size: 13px; cursor: pointer; user-select: none; }
+.chk input { width: 16px; height: 16px; accent-color: var(--brand); }
+
+/* ---------- Buttons ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  border: 1px solid var(--line); background: #f7f9fa; color: var(--ink);
+  padding: 7px 12px; border-radius: 7px; cursor: pointer; font-weight: 600; font-size: 13px;
+  transition: background .15s, border-color .15s, box-shadow .15s; white-space: nowrap;
+}
+.btn:hover { background: #eef2f4; border-color: #c4ced6; }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+.btn-primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+.btn-primary:hover { background: var(--brand-dark); border-color: var(--brand-dark); }
+.btn-teal { background: var(--teal); border-color: var(--teal); color: #fff; }
+.btn-teal:hover { background: #0b5f59; border-color: #0b5f59; }
+.btn-danger { background: #fff; border-color: #f1b4b4; color: var(--err); }
+.btn-danger:hover { background: var(--err-bg); border-color: var(--err); }
+.btn-ghost { background: transparent; }
+.btn-xs { padding: 3px 8px; font-size: 12px; border-radius: 6px; }
+.btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.btn-grid .btn { width: 100%; }
+.btn-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.subhead { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin: 14px 0 8px; }
+.subhead:first-child { margin-top: 0; }
+
+/* ---------- Map ---------- */
+.map-wrap { position: relative; background: #fff; }
+.map-wrap:fullscreen { display: flex; flex-direction: column; width: 100%; height: 100%; }
+.map-wrap:fullscreen #map { flex: 1; height: auto; min-height: 0; border-radius: 0; }
+.search-bar { display: flex; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); position: relative; flex-wrap: wrap; }
+.search-bar input { flex: 1 1 260px; }
+.search-results {
+  position: absolute; left: 12px; right: 12px; top: 100%; z-index: 1200; margin: 4px 0 0; padding: 4px;
+  list-style: none; background: #fff; border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.15); max-height: 320px; overflow: auto;
+}
+.search-results li button {
+  display: block; width: 100%; text-align: left; border: 0; background: transparent; padding: 7px 9px; border-radius: 6px; cursor: pointer;
+}
+.search-results li button:hover, .search-results li button:focus { background: #fff3e6; outline: none; }
+.search-results .sr-type { font-size: 11px; color: var(--muted); }
+#map { height: 68vh; min-height: 420px; width: 100%; background: #dfe6ea; }
+.map-foot {
+  display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 14px;
+  padding: 7px 12px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line);
+}
+.map-fallback { padding: 40px 20px; text-align: center; color: var(--err); background: var(--err-bg); }
+.leaflet-container { font: 13px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+.leaflet-container.adding { cursor: crosshair; }
+.map-btns a { font-size: 17px; font-weight: 700; color: #222 !important; display: grid !important; place-items: center; text-decoration: none; }
+.map-coords {
+  background: rgba(255,255,255,.92); padding: 3px 8px; border-radius: 6px; font-size: 12px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.25); font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+.map-legend {
+  background: rgba(255,255,255,.94); padding: 6px 9px; border-radius: 7px; font-size: 11.5px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.25); line-height: 1.6;
+}
+.map-legend i { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; border: 1.5px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.2); }
+
+/* numbered pins */
+.pin-wrap { background: none !important; border: none !important; }
+.pin {
+  position: absolute; left: 0; top: 0; width: 30px; height: 30px; box-sizing: border-box;
+  border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
+  background: var(--pin-map); border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5);
+  display: flex; align-items: center; justify-content: center;
+}
+.pin span { transform: rotate(45deg); color: #fff; font: 700 12px/1 system-ui, Arial, sans-serif; letter-spacing: -.3px; }
+.pin.d3 span { font-size: 10.5px; }
+.pin.d4 span { font-size: 9px; letter-spacing: -.5px; }
+.pin.t-gps { background: var(--pin-gps); }
+.pin.t-imp { background: var(--pin-imp); }
+.pin.t-typed { background: var(--pin-typed); }
+.pin.t-edit { background: var(--pin-edit); }
+.pin.sel { background: var(--sel); box-shadow: 0 0 0 4px rgba(249,115,22,.45), 0 2px 8px rgba(0,0,0,.55); }
+.pin.noelev::after {
+  content: ""; position: absolute; right: -3px; top: -3px; width: 9px; height: 9px; border-radius: 50%;
+  background: #ef4444; border: 1.5px solid #fff;
+}
+
+/* popup */
+.pp { min-width: 220px; }
+.pp-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 15px; }
+.pp-id { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
+.pp-t { border-collapse: collapse; width: 100%; font-size: 12.5px; }
+.pp-t th { text-align: left; color: var(--muted); font-weight: 600; padding: 2px 8px 2px 0; white-space: nowrap; vertical-align: top; }
+.pp-t td { padding: 2px 0; }
+.pp-crs { font-size: 10.5px; color: var(--muted); margin-top: 4px; }
+.pp-act { display: flex; gap: 6px; margin-top: 8px; }
+.leaflet-popup-content { margin: 10px 12px; }
+
+/* badges & status */
+.badge { display: inline-block; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 700; color: #fff; white-space: nowrap; }
+.b-map { background: var(--pin-map); }
+.b-gps { background: var(--pin-gps); }
+.b-imp { background: var(--pin-imp); }
+.b-typed { background: var(--pin-typed); }
+.b-edit { background: var(--pin-edit); }
+.st { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 600; padding: 1px 6px; border-radius: 5px; white-space: nowrap; }
+.st-ok { color: var(--ok); background: var(--ok-bg); }
+.st-fail { color: var(--err); background: var(--err-bg); }
+.st-load { color: #1d4ed8; background: #e8efff; }
+.st-man { color: var(--warn); background: var(--warn-bg); }
+.st-imp { color: var(--pin-imp); background: #f1eafe; }
+.spin { width: 10px; height: 10px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; display: inline-block; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---------- GPS readout ---------- */
+.gps-box { border: 1px dashed var(--line); border-radius: 8px; padding: 8px 10px; margin-top: 8px; font-size: 12.5px; background: #fafcfc; }
+.gps-box dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0; }
+.gps-box dt { color: var(--muted); font-weight: 600; }
+.gps-box dd { margin: 0; font-family: ui-monospace, Menlo, Consolas, monospace; word-break: break-word; }
+
+/* ---------- ROI ---------- */
+.roi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* ---------- Statistics ---------- */
+.stats-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.stat { border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; background: #fbfcfd; min-width: 0; }
+.stat .k { font-size: 11px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .3px; }
+.stat .v { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stat .v small { font-size: 11px; font-weight: 600; color: var(--muted); }
+.stat.hl { border-color: #f5c08f; background: #fff8f1; }
+
+/* ---------- Table ---------- */
+.table-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.table-tools input { width: 230px; }
+.table-wrap { position: relative; overflow: auto; max-height: 62vh; border-top: 1px solid var(--line); }
+table.pts { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 13px; }
+table.pts th {
+  position: sticky; top: 0; z-index: 2; background: #f1f5f7; text-align: left; font-size: 11.5px;
+  text-transform: uppercase; letter-spacing: .3px; color: #3b4a55; padding: 8px 8px; border-bottom: 1px solid var(--line); white-space: nowrap;
+}
+table.pts td { padding: 5px 8px; border-bottom: 1px solid #edf1f3; white-space: nowrap; vertical-align: middle; }
+table.pts tbody tr { cursor: pointer; }
+table.pts tbody tr:hover td { background: #f8fafb; }
+table.pts tbody tr.selected td { background: #fff1e4; }
+table.pts tbody tr.selected td:first-child { box-shadow: inset 4px 0 0 var(--sel); }
+table.pts td.num { font-variant-numeric: tabular-nums; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; }
+table.pts td.c-sno { font-weight: 700; text-align: right; }
+.cell-in { width: 120px !important; padding: 4px 6px !important; border-radius: 5px !important; border-color: transparent !important; background: transparent !important; }
+.cell-in:hover { border-color: var(--line) !important; background: #fff !important; }
+.cell-in:focus { border-color: var(--brand) !important; background: #fff !important; }
+.c-act { display: flex; gap: 4px; }
+.empty-msg { padding: 28px 16px; text-align: center; color: var(--muted); }
+
+/* ---------- Export/Import ---------- */
+.io-grid { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.notes { font-size: 12.5px; color: #33434e; }
+.notes dt { font-weight: 700; margin-top: 6px; }
+.notes dd { margin: 2px 0 0 0; }
+.def-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.def { border-left: 4px solid var(--line); padding: 4px 10px; }
+.def b { display: block; margin-bottom: 2px; }
+
+/* ---------- Modal & toast ---------- */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 5000; background: rgba(10, 25, 30, .5);
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.modal {
+  background: #fff; border-radius: 12px; width: 100%; max-width: 460px; max-height: 92vh; overflow: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,.35);
+}
+.modal.wide { max-width: 640px; }
+.modal-head { padding: 14px 18px 8px; }
+.modal-head h3 { font-size: 17px; }
+.modal-body { padding: 4px 18px 8px; }
+.modal-body p { margin: 6px 0; }
+.modal-foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 12px 18px 16px; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.form-grid .span2 { grid-column: 1 / -1; }
+.form-err { color: var(--err); background: var(--err-bg); padding: 6px 9px; border-radius: 6px; font-size: 13px; }
+.toast-root { position: fixed; right: 16px; bottom: 16px; z-index: 6000; display: flex; flex-direction: column; gap: 8px; max-width: min(420px, calc(100vw - 32px)); }
+.toast {
+  display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 9px; color: #fff;
+  background: #24343d; box-shadow: 0 6px 18px rgba(0,0,0,.25); font-size: 13.5px; animation: tin .2s ease-out;
+}
+.toast-ok { background: #166534; }
+.toast-warn { background: #8a5a00; }
+.toast-error { background: #991b1b; }
+.toast span { flex: 1; }
+.toast-x { border: 0; background: transparent; color: #fff; font-size: 18px; line-height: 1; cursor: pointer; padding: 0 2px; opacity: .8; }
+@keyframes tin { from { transform: translateY(8px); opacity: 0; } }
+
+footer.app-foot { font-size: 12px; color: var(--muted); padding: 4px 2px 0; }
+footer.app-foot a { color: var(--teal); }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1350px) { .meta-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 1100px) {
+  .workspace { grid-template-columns: 1fr; }
+  .sidebar { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .sidebar .panel { margin-bottom: 0; }
+  #map { height: 62vh; }
+  .def-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 760px) {
+  .sidebar { grid-template-columns: 1fr; }
+  .meta-grid { grid-template-columns: 1fr 1fr; }
+  .stats-grid { grid-template-columns: 1fr 1fr; }
+  .app-header h1 { font-size: 17px; }
+  .table-tools input { width: 100%; }
+  .def-grid { grid-template-columns: 1fr; }
+  .form-grid { grid-template-columns: 1fr; }
+  .container { padding: 10px 10px 24px; }
+}
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <div class="brand-logo" aria-hidden="true">SBT</div>
+    <div>
+      <h1>Seabuckthorn Location &amp; Elevation Collector — Ladakh</h1>
+      <p class="subtitle">Multi-point GIS data collection tool</p>
+    </div>
+  </div>
+  <div class="pills" aria-live="polite">
+    <span class="pill crs" title="All coordinates are stored as WGS 84 geographic coordinates (EPSG:4326) in decimal degrees">CRS: WGS 84 / EPSG:4326</span>
+    <span class="pill" id="pillNet"><span class="dot"></span><span class="t">Network: checking…</span></span>
+    <span class="pill" id="pillTiles"><span class="dot"></span><span class="t">Map tiles: loading…</span></span>
+    <span class="pill" id="pillElev"><span class="dot"></span><span class="t">Elevation API: idle</span></span>
+    <span class="pill" id="pillSave"><span class="dot"></span><span class="t">Autosave: –</span></span>
+  </div>
+</header>
+
+<main class="container">
+
+  <!-- 1. PROJECT INFORMATION -->
+  <section class="panel" id="secProject">
+    <div class="panel-head">
+      <h2><span class="sec-no">1</span> Project Information</h2>
+      <span class="hint" style="margin:0">Optional. District, Block, Village and Site are applied to <b>newly created</b> points.</span>
+    </div>
+    <div class="panel-body">
+      <div class="meta-grid">
+        <label class="field">Project Name<input type="text" id="metaProject" data-meta="project" placeholder="e.g. SBT Mapping 2026"></label>
+        <label class="field">Surveyor Name<input type="text" id="metaSurveyor" data-meta="surveyor" placeholder="Name"></label>
+        <label class="field">Survey ID<input type="text" id="metaSurveyId" data-meta="surveyId" placeholder="e.g. LEH-SBT-01"></label>
+        <label class="field">District<input type="text" id="metaDistrict" data-meta="district" placeholder="e.g. Leh"></label>
+        <label class="field">Block<input type="text" id="metaBlock" data-meta="block" placeholder="e.g. Nubra"></label>
+        <label class="field">Village<input type="text" id="metaVillage" data-meta="village" placeholder="e.g. Diskit"></label>
+        <label class="field">Site (next point)<input type="text" id="metaSite" data-meta="site" placeholder="optional"></label>
+      </div>
+    </div>
+  </section>
+
+  <div class="workspace">
+    <!-- 2. MAP -->
+    <section class="panel" id="secMap" style="overflow:hidden">
+      <div class="panel-head">
+        <h2><span class="sec-no">2</span> Map</h2>
+        <span class="hint" style="margin:0">Click on the map to add a point · Double-click zooms (no point added)</span>
+      </div>
+      <div class="map-wrap" id="mapWrap">
+        <div class="search-bar">
+          <input type="text" id="searchInput" placeholder="Search village, town, district, place name — or coordinates e.g. 34.1526, 77.5771" aria-label="Search location" autocomplete="off">
+          <button class="btn btn-teal" id="btnSearch" type="button">🔍 Search</button>
+          <ul class="search-results" id="searchResults" hidden></ul>
+        </div>
+        <div id="map" role="application" aria-label="Interactive map"></div>
+        <div class="map-fallback" id="mapFallback" hidden>
+          <b>The map library could not be loaded</b> (no internet connection, or the CDN is blocked).<br>
+          Your saved points are still available in the table below and can be edited and exported.
+          Reconnect to the internet and reload the page to use the map.
+        </div>
+      </div>
+      <div class="map-foot">
+        <span>Coordinate format: <b>Decimal Degrees (WGS84)</b> · CRS: <b>WGS 84 / EPSG:4326</b></span>
+        <span id="mapModeHint">Mode: click-to-add <b>ON</b></span>
+      </div>
+    </section>
+
+    <aside class="sidebar">
+      <!-- 3. SURVEY CONTROLS -->
+      <section class="panel" id="secControls">
+        <div class="panel-head"><h2><span class="sec-no">3</span> Survey Controls</h2></div>
+        <div class="panel-body">
+          <div class="subhead">Collection</div>
+          <label class="chk"><input type="checkbox" id="chkClickAdd" checked> Add a point when I click the map</label>
+          <div class="btn-grid" style="margin-top:10px">
+            <button class="btn" id="btnLadakh" type="button">🏔 Ladakh View</button>
+            <button class="btn" id="btnFit" type="button">⤢ Fit All Points</button>
+            <button class="btn" id="btnUndo" type="button">↶ Undo Last Point</button>
+            <button class="btn" id="btnRefreshElev" type="button">⟳ Refresh Elevations</button>
+            <button class="btn btn-danger" id="btnClearAll" type="button" style="grid-column:1/-1">🗑 Clear All</button>
+          </div>
+
+          <div class="subhead">Device GPS</div>
+          <div class="btn-row">
+            <button class="btn btn-teal" id="btnMyLoc" type="button">◎ My Location</button>
+            <button class="btn" id="btnAddGps" type="button" disabled>＋ Add GPS point</button>
+          </div>
+          <div class="gps-box" id="gpsReadout">No GPS fix yet. Press <b>My Location</b> to read the device/browser position.</div>
+
+          <div class="subhead">Elevation</div>
+          <label class="field">Elevation service
+            <select id="selElevProvider"></select>
+          </label>
+          <p class="hint">Elevation comes from an online DEM service — not from GPS. Failed look-ups are shown as “Elevation unavailable”; no value is ever invented.</p>
+
+          <div class="subhead">Display</div>
+          <label class="chk"><input type="checkbox" id="chkDms"> Also show coordinates as DMS (display only)</label>
+
+          <div class="subhead">Region of interest (ROI)</div>
+          <div class="roi-grid">
+            <label class="field">North (lat)<input type="text" id="roiN" inputmode="decimal"></label>
+            <label class="field">South (lat)<input type="text" id="roiS" inputmode="decimal"></label>
+            <label class="field">West (lon)<input type="text" id="roiW" inputmode="decimal"></label>
+            <label class="field">East (lon)<input type="text" id="roiE" inputmode="decimal"></label>
+          </div>
+          <div class="btn-row" style="margin-top:8px">
+            <button class="btn btn-xs" id="btnApplyRoi" type="button">Apply ROI</button>
+            <button class="btn btn-xs" id="btnZoomRoi" type="button">Zoom to ROI</button>
+            <button class="btn btn-xs btn-ghost" id="btnResetRoi" type="button">Reset default</button>
+          </div>
+          <div style="margin-top:8px; display:grid; gap:6px">
+            <label class="chk"><input type="checkbox" id="chkShowRoi" checked> Show ROI rectangle</label>
+            <label class="chk"><input type="checkbox" id="chkRestrictRoi"> Restrict points to ROI</label>
+          </div>
+
+          <details style="margin-top:14px">
+            <summary class="subhead" style="cursor:pointer; display:list-item">API keys (optional)</summary>
+            <label class="field" style="margin-top:6px">Google Maps API key (enables Google Elevation API)
+              <input type="password" id="inpGoogleKey" autocomplete="off" placeholder="leave empty to use free services">
+            </label>
+            <label class="field" style="margin-top:6px">Open-Elevation API key (higher limits)
+              <input type="password" id="inpOeKey" autocomplete="off" placeholder="optional">
+            </label>
+            <div class="btn-row" style="margin-top:8px">
+              <button class="btn btn-xs" id="btnSaveKeys" type="button">Save keys</button>
+              <button class="btn btn-xs btn-ghost" id="btnClearKeys" type="button">Clear keys</button>
+            </div>
+            <p class="hint">Keys are stored only in this browser (localStorage) and sent only to the matching service. Keys can also be set in the <span class="mono">CONFIG</span> section of this file.</p>
+          </details>
+        </div>
+      </section>
+
+      <!-- 4. STATISTICS -->
+      <section class="panel" id="secStats">
+        <div class="panel-head"><h2><span class="sec-no">4</span> Statistics</h2></div>
+        <div class="panel-body">
+          <div class="stats-grid">
+            <div class="stat hl"><div class="k">Total points</div><div class="v" id="stTotal">0</div></div>
+            <div class="stat"><div class="k">With elevation</div><div class="v" id="stWithElev">0</div></div>
+            <div class="stat"><div class="k">Without elev.</div><div class="v" id="stNoElev">0</div></div>
+            <div class="stat"><div class="k">Min elevation</div><div class="v" id="stMin">–</div></div>
+            <div class="stat"><div class="k">Max elevation</div><div class="v" id="stMax">–</div></div>
+            <div class="stat"><div class="k">Mean elevation</div><div class="v" id="stMean">–</div></div>
+            <div class="stat"><div class="k">Northmost lat</div><div class="v" id="stNorth">–</div></div>
+            <div class="stat"><div class="k">Southmost lat</div><div class="v" id="stSouth">–</div></div>
+            <div class="stat"><div class="k">Pending look-ups</div><div class="v" id="stPending">0</div></div>
+            <div class="stat"><div class="k">Eastmost lon</div><div class="v" id="stEast">–</div></div>
+            <div class="stat"><div class="k">Westmost lon</div><div class="v" id="stWest">–</div></div>
+            <div class="stat"><div class="k">Outside ROI</div><div class="v" id="stOutRoi">0</div></div>
+          </div>
+          <p class="hint" id="stTypes">Map-selected: 0 · GPS: 0 · Imported: 0 · Other: 0</p>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <!-- 5. COLLECTED POINTS -->
+  <section class="panel" id="secPoints">
+    <div class="panel-head">
+      <h2><span class="sec-no">5</span> Collected Points</h2>
+      <div class="table-tools">
+        <input type="text" id="tblFilter" placeholder="Filter by district, village, site, ID…" aria-label="Filter table">
+        <span class="hint" style="margin:0" id="tblCount">0 points</span>
+        <span class="pill crs" style="color:var(--ink); background:#fff3e6">Decimal Degrees (WGS84)</span>
+      </div>
+    </div>
+    <div class="table-wrap" id="tableWrap">
+      <table class="pts" id="pointsTable">
+        <thead>
+          <tr>
+            <th>S.No.</th><th>Type</th><th>District</th><th>Block</th><th>Village</th><th>Site</th>
+            <th>Latitude</th><th>Longitude</th><th>Altitude (m)</th><th>Elevation Source</th>
+            <th>GPS Accuracy (m)</th><th>GPS Altitude (m)</th><th>Date</th><th>Time</th><th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="pointsBody"></tbody>
+      </table>
+      <div class="empty-msg" id="emptyMsg">No points yet. Click anywhere on the map, use <b>My Location</b>, or <b>Import CSV</b>.</div>
+    </div>
+    <div class="panel-body" style="padding-top:8px">
+      <p class="hint" style="margin:0">District, Block, Village and Site can be edited directly in the table. Use <b>Edit</b> to change coordinates or altitude. Click a row to locate the point on the map.</p>
+    </div>
+  </section>
+
+  <!-- 6. EXPORT / IMPORT -->
+  <section class="panel" id="secIO">
+    <div class="panel-head"><h2><span class="sec-no">6</span> Export / Import</h2></div>
+    <div class="panel-body">
+      <div class="io-grid">
+        <button class="btn btn-primary" id="btnCsv" type="button">⬇ Download CSV</button>
+        <button class="btn btn-primary" id="btnXlsx" type="button">⬇ Download Excel</button>
+        <button class="btn" id="btnImport" type="button">⬆ Import CSV</button>
+        <button class="btn btn-ghost" id="btnTemplate" type="button">CSV template</button>
+        <input type="file" id="fileImport" accept=".csv,.txt,.tsv,.xlsx,.xls,text/csv" hidden>
+      </div>
+      <p class="hint">CSV is UTF-8 (with BOM for Excel). Import accepts CSV (comma, semicolon or tab separated) and also .xlsx. Recognised columns: Lat/Latitude, Lon/Long/Lng/Longitude, Altitude/Elevation, District, Block, Village, Site (plus all columns this tool exports).</p>
+
+      <div class="subhead" style="margin-top:16px">Data definitions (important for research use)</div>
+      <div class="def-grid notes">
+        <div class="def" style="border-color:var(--pin-map)"><b>Map-selected location</b>Latitude/longitude of the place you clicked on the map. Positional accuracy depends on zoom level and basemap/imagery alignment. GPS Accuracy is recorded as “Map selected”.</div>
+        <div class="def" style="border-color:var(--pin-gps)"><b>GPS location</b>Latitude/longitude reported by this device’s geolocation (GPS / Wi-Fi / cell). Its reported horizontal accuracy (m) is stored in “GPS Accuracy (m)”.</div>
+        <div class="def" style="border-color:var(--brand)"><b>Elevation (Altitude (m))</b>Terrain height retrieved from an elevation service / DEM for the stored coordinates. The service used is recorded in “Elevation Source”.</div>
+        <div class="def" style="border-color:var(--pin-edit)"><b>GPS altitude</b>Height reported by the device GPS, if any. Stored separately in “GPS Altitude (m)” and never mixed with DEM elevation.</div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="app-foot">
+    Basemaps: © OpenStreetMap contributors; CARTO; OpenTopoMap (CC-BY-SA); Esri World Imagery (© Esri &amp; partners — subject to Esri terms of use).
+    Elevation: Open-Elevation; Copernicus DEM GLO-90 via Open-Meteo; Google Elevation API (only if you provide a key).
+    Search: Nominatim / OpenStreetMap, Photon (komoot).
+  </footer>
+</main>
+
+<div id="modalRoot"></div>
+<div class="toast-root" id="toastRoot" aria-live="polite"></div>
+
+<noscript><div style="padding:20px;background:#fdecec;color:#991b1b">JavaScript must be enabled to use this application.</div></noscript>
+
+<script>
+"use strict";
+/* ==========================================================================
+ *  CONFIGURATION — edit these values if needed
+ * ==========================================================================
+ *  GOOGLE_MAPS_API_KEY : leave "" to use only free/open services (default).
+ *                        If you enter YOUR OWN key, the Google Elevation API
+ *                        becomes the first elevation service that is tried.
+ *  ELEVATION_API_URL   : Open-Elevation compatible endpoint (GET ?locations=lat,lon|lat,lon).
+ *                        You can point this at a self-hosted Open-Elevation server.
+ *  Never paste somebody else's key here, and never publish a file containing your key.
+ * ========================================================================== */
+const CONFIG = {
+    GOOGLE_MAPS_API_KEY: "",
+    ELEVATION_API_URL: "https://api.open-elevation.com/api/v1/lookup",
+    DEFAULT_LATITUDE: 34.7,
+    DEFAULT_LONGITUDE: 77.2,
+    DEFAULT_ZOOM: 8,
+
+    // ---- Additional settings ----
+    OPEN_ELEVATION_API_KEY: "",                                  // optional free key from open-elevation.com (higher limits)
+    DEM_API_URL: "https://api.open-meteo.com/v1/elevation",      // Copernicus DEM GLO-90 (90 m) — no key needed
+    ELEVATION_PROVIDER_ORDER: ["google", "open-elevation", "open-meteo-dem"], // tried in this order ("google" only if a key is set)
+    ELEVATION_BATCH_SIZE: 100,          // points per request
+    ELEVATION_TIMEOUT_MS: 20000,        // per request
+    ELEVATION_MIN_INTERVAL_MS: 1100,    // minimum gap between requests (be polite to free services)
+    ELEVATION_RATE_LIMIT_BACKOFF_MS: 60000,
+    ELEVATION_AUTO_RETRIES: 2,          // automatic retries after network / rate-limit failures
+    DUPLICATE_DISTANCE_M: 5,            // "very close to an existing point" threshold
+    DEFAULT_ROI: { north: 35.136103, west: 76.757353, south: 34.494454, east: 77.731841 },
+    GEOCODER_URL: "https://nominatim.openstreetmap.org/search",
+    GEOCODER_FALLBACK_URL: "https://photon.komoot.io/api/",
+    STORAGE_KEY: "sbt_map_point_collector_data_v1",
+    SETTINGS_KEY: "sbt_map_point_collector_settings_v1",
+    POINT_ID_PREFIX: "SBT-"
+};
+
+/* ==========================================================================
+ *  ELEVATION SERVICES
+ *  Each service receives an array [{lat, lon}, ...] and must return an array
+ *  (same length, same order) of elevations in metres, or null where unknown.
+ *  To add another service, copy the template at the bottom of this object
+ *  and add its id to CONFIG.ELEVATION_PROVIDER_ORDER.
+ * ========================================================================== */
+const ELEVATION_PROVIDERS = {
+    "google": {
+        label: "Google Elevation API",
+        isConfigured: () => getGoogleKey() !== "",
+        notConfiguredMsg: "no Google Maps API key set",
+        fetchElevations: async (locs) => {
+            const ElevationService = await loadGoogleElevation();
+            const svc = new ElevationService();
+            const results = await withTimeout(new Promise((resolve, reject) => {
+                svc.getElevationForLocations(
+                    { locations: locs.map(l => ({ lat: l.lat, lng: l.lon })) },
+                    (res, status) => {
+                        if (status === "OK" && Array.isArray(res)) { resolve(res); return; }
+                        const e = new Error("Google returned status " + status);
+                        if (status === "OVER_QUERY_LIMIT") { e.status = 429; e.transient = true; }
+                        if (status === "UNKNOWN_ERROR") e.transient = true;
+                        reject(e);
+                    });
+            }), CONFIG.ELEVATION_TIMEOUT_MS);
+            if (results.length !== locs.length) throw new Error("Google returned " + results.length + " results for " + locs.length + " points");
+            return results.map(r => (r && typeof r.elevation === "number") ? r.elevation : null);
+        }
+    },
+    "open-elevation": {
+        label: "Open-Elevation",
+        isConfigured: () => !!CONFIG.ELEVATION_API_URL,
+        notConfiguredMsg: "ELEVATION_API_URL is empty",
+        fetchElevations: async (locs) => {
+            const url = new URL(CONFIG.ELEVATION_API_URL);
+            url.searchParams.set("locations", locs.map(l => l.lat.toFixed(6) + "," + l.lon.toFixed(6)).join("|"));
+            const key = getOpenElevationKey();
+            if (key) url.searchParams.set("api_key", key);
+            const data = await fetchJson(url.toString());
+            if (!data || !Array.isArray(data.results)) throw new Error("unexpected response format");
+            if (data.results.length !== locs.length) throw new Error("returned " + data.results.length + " results for " + locs.length + " points");
+            return data.results.map(r => (r && typeof r.elevation === "number") ? r.elevation : null);
+        }
+    },
+    "open-meteo-dem": {
+        label: "DEM (Copernicus GLO-90 via Open-Meteo)",
+        isConfigured: () => !!CONFIG.DEM_API_URL,
+        notConfiguredMsg: "DEM_API_URL is empty",
+        fetchElevations: async (locs) => {
+            const url = new URL(CONFIG.DEM_API_URL);
+            url.searchParams.set("latitude", locs.map(l => l.lat.toFixed(6)).join(","));
+            url.searchParams.set("longitude", locs.map(l => l.lon.toFixed(6)).join(","));
+            const data = await fetchJson(url.toString());
+            if (!data || !Array.isArray(data.elevation)) throw new Error("unexpected response format");
+            if (data.elevation.length !== locs.length) throw new Error("returned " + data.elevation.length + " results for " + locs.length + " points");
+            return data.elevation.map(v => (typeof v === "number") ? v : null);
+        }
+    }
+    /*  ---- TEMPLATE for another elevation service ----
+    ,"my-service": {
+        label: "My Elevation Service",
+        isConfigured: () => true,
+        notConfiguredMsg: "",
+        fetchElevations: async (locs) => {
+            const url = "https://example.org/elevation?points=" +
+                        encodeURIComponent(locs.map(l => l.lat + "," + l.lon).join("|"));
+            const data = await fetchJson(url);
+            return data.values;            // array of metres (or null), same order as locs
+        }
+    }
+    */
+};
+
+/* ==========================================================================
+ *  Small helpers
+ * ========================================================================== */
+const $ = (id) => document.getElementById(id);
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function pad(n, w = 2) { return String(n).padStart(w, "0"); }
+function isNum(v) { return typeof v === "number" && Number.isFinite(v); }
+function round(v, d) { const f = Math.pow(10, d); return Math.round(v * f) / f; }
+function localDate(d) { return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+function localTime(d) { return pad(d.getHours()) + ":" + pad(d.getMinutes()) + ":" + pad(d.getSeconds()); }
+function tzString(d) {
+    const off = -d.getTimezoneOffset(), a = Math.abs(off);
+    return "UTC" + (off >= 0 ? "+" : "-") + pad(Math.floor(a / 60)) + ":" + pad(a % 60);
+}
+function uid() {
+    try { if (window.crypto && crypto.randomUUID) return crypto.randomUUID(); } catch (e) { /* ignore */ }
+    return "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
+function debounce(fn, ms) {
+    let t = null;
+    const d = (...args) => { clearTimeout(t); t = setTimeout(() => { t = null; fn(...args); }, ms); };
+    d.flush = (...args) => { clearTimeout(t); t = null; fn(...args); };
+    return d;
+}
+function withTimeout(promise, ms) {
+    return new Promise((resolve, reject) => {
+        const t = setTimeout(() => { const e = new Error("request timed out after " + Math.round(ms / 1000) + " s"); e.transient = true; reject(e); }, ms);
+        promise.then(v => { clearTimeout(t); resolve(v); }, e => { clearTimeout(t); reject(e); });
+    });
+}
+/** Coordinates: at least 6 decimals, up to 8 if the stored value has them. */
+function fmtCoord(v) {
+    if (!isNum(v)) return "";
+    const s = String(round(v, 8));
+    const dec = s.includes("e") ? 8 : (s.split(".")[1] || "").length;
+    return v.toFixed(Math.min(8, Math.max(6, dec)));
+}
+function fmtElev(v) {
+    return isNum(v) ? v.toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : "";
+}
+function toDMS(v, isLat) {
+    if (!isNum(v)) return "";
+    const hemi = isLat ? (v >= 0 ? "N" : "S") : (v >= 0 ? "E" : "W");
+    let a = Math.abs(v), d = Math.floor(a), mf = (a - d) * 60, m = Math.floor(mf), s = round((mf - m) * 60, 2);
+    if (s >= 60) { s = 0; m += 1; }
+    if (m >= 60) { m = 0; d += 1; }
+    return d + "°" + pad(m) + "′" + s.toFixed(2).padStart(5, "0") + "″" + hemi;
+}
+function haversine(lat1, lon1, lat2, lon2) {
+    const R = 6371008.8, toR = Math.PI / 180;
+    const dLat = (lat2 - lat1) * toR, dLon = (lon2 - lon1) * toR;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * toR) * Math.cos(lat2 * toR) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+function normLon(lng) { return ((lng + 180) % 360 + 360) % 360 - 180; }
+function isValidElevation(v) { return isNum(v) && v > -500 && v < 9000; }
+
+/** Parse a number typed by a user or read from CSV (handles decimal commas, units, spaces). */
+function parseNumber(v) {
+    if (typeof v === "number") return Number.isFinite(v) ? v : NaN;
+    if (v == null) return NaN;
+    let s = String(v).trim().replace(/[\s ]/g, "").replace(/(m|metres|meters)$/i, "");
+    if (s === "") return NaN;
+    if (s.includes(",") && s.includes(".")) s = s.replace(/,/g, "");
+    else if (/^-?\d{1,3}(,\d{3})+$/.test(s)) s = s.replace(/,/g, "");
+    else s = s.replace(",", ".");
+    if (!/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(s)) return NaN;
+    return Number(s);
+}
+/** Parse a decimal-degree coordinate; accepts trailing/leading N/S/E/W and the ° sign. */
+function parseCoord(v) {
+    if (typeof v === "number") return Number.isFinite(v) ? v : NaN;
+    if (v == null) return NaN;
+    let s = String(v).trim().toUpperCase().replace(/°/g, "");
+    let sign = 1;
+    const m = s.match(/^([NSEW])\s*(.*)$/) || s.match(/^(.*?)\s*([NSEW])$/);
+    if (m) {
+        const hemi = /^[NSEW]$/.test(m[1]) ? m[1] : m[2];
+        s = /^[NSEW]$/.test(m[1]) ? m[2] : m[1];
+        if (hemi === "S" || hemi === "W") sign = -1;
+    }
+    const n = parseNumber(s);
+    return Number.isFinite(n) ? sign * n : NaN;
+}
+function validateLatLon(lat, lon) {
+    if (!isNum(lat) || !isNum(lon)) return "Latitude and longitude must be numeric (decimal degrees).";
+    if (lat < -90 || lat > 90) return "Latitude must be between -90 and +90.";
+    if (lon < -180 || lon > 180) return "Longitude must be between -180 and +180.";
+    return "";
+}
+
+/* ==========================================================================
+ *  Toasts, modals, global error handling
+ * ========================================================================== */
+function toast(msg, type = "info", ms = 4500) {
+    try {
+        const root = $("toastRoot");
+        while (root.children.length >= 5) root.firstElementChild.remove();
+        const el = document.createElement("div");
+        el.className = "toast toast-" + type;
+        el.setAttribute("role", type === "error" ? "alert" : "status");
+        el.innerHTML = "<span>" + esc(msg) + "</span><button class=\"toast-x\" type=\"button\" aria-label=\"Dismiss\">×</button>";
+        el.querySelector("button").addEventListener("click", () => el.remove());
+        root.appendChild(el);
+        if (ms > 0) setTimeout(() => el.remove(), ms);
+    } catch (e) { console.error(e); }
+}
+let lastErrorToast = 0;
+function reportError(err, context) {
+    console.error(context || "Error", err);
+    const now = Date.now();
+    if (now - lastErrorToast < 1500) return;
+    lastErrorToast = now;
+    toast((context ? context + ": " : "Unexpected error: ") + (err && err.message ? err.message : String(err)), "error", 7000);
+}
+window.addEventListener("error", e => reportError(e.error || e.message));
+window.addEventListener("unhandledrejection", e => reportError(e.reason));
+/** Wrap an event handler so a bug in one action cannot break the whole app. */
+function guard(fn, context) {
+    return function (...args) {
+        try {
+            const r = fn.apply(this, args);
+            if (r && typeof r.catch === "function") r.catch(err => reportError(err, context));
+            return r;
+        } catch (err) { reportError(err, context); }
+    };
+}
+
+/**
+ * openModal({title, body, buttons:[{label,value,cls}], onButton(value, box) -> false keeps it open,
+ *            onSetup(box), escValue, wide}) -> Promise<value>
+ */
+const modalStack = [];
+function openModal(opts) {
+    return new Promise(resolve => {
+        const back = document.createElement("div");
+        back.className = "modal-backdrop";
+        const box = document.createElement("div");
+        box.className = "modal" + (opts.wide ? " wide" : "");
+        box.setAttribute("role", "dialog");
+        box.setAttribute("aria-modal", "true");
+        box.innerHTML = "<div class=\"modal-head\"><h3></h3></div><div class=\"modal-body\"></div><div class=\"modal-foot\"></div>";
+        box.querySelector("h3").textContent = opts.title || "";
+        box.querySelector(".modal-body").innerHTML = opts.body || "";
+        const foot = box.querySelector(".modal-foot");
+        let closed = false;
+        const close = (val) => {
+            if (closed) return;
+            closed = true;
+            document.removeEventListener("keydown", onKey, true);
+            const si = modalStack.indexOf(back);
+            if (si >= 0) modalStack.splice(si, 1);
+            back.remove();
+            resolve(val);
+        };
+        let primary = null;
+        (opts.buttons || [{ label: "OK", value: true, cls: "btn-primary" }]).forEach(b => {
+            const btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "btn " + (b.cls || "");
+            btn.textContent = b.label;
+            if ((b.cls || "").includes("btn-primary")) primary = btn;
+            btn.addEventListener("click", async () => {
+                try {
+                    if (opts.onButton) {
+                        const r = await opts.onButton(b.value, box);
+                        if (r === false) return;
+                    }
+                    close(b.value);
+                } catch (err) { reportError(err); }
+            });
+            foot.appendChild(btn);
+        });
+        const onKey = (e) => {
+            if (!back.isConnected || modalStack[modalStack.length - 1] !== back) return; // only the top-most dialog reacts
+            if (e.key === "Escape" && "escValue" in opts) { e.preventDefault(); e.stopPropagation(); close(opts.escValue); }
+            else if (e.key === "Enter" && primary && e.target && e.target.tagName === "INPUT" && box.contains(e.target)) {
+                e.preventDefault(); primary.click();
+            }
+        };
+        document.addEventListener("keydown", onKey, true);
+        back.appendChild(box);
+        $("modalRoot").appendChild(back);
+        modalStack.push(back);
+        if (opts.onSetup) { try { opts.onSetup(box); } catch (err) { reportError(err); } }
+        const first = box.querySelector(".modal-body input:not([type=checkbox]), .modal-body textarea") || primary || foot.querySelector("button");
+        if (first) setTimeout(() => first.focus(), 30);
+    });
+}
+function confirmModal(title, html, okLabel = "OK", okCls = "btn-primary", cancelLabel = "Cancel") {
+    return openModal({
+        title, body: html, escValue: false,
+        buttons: [{ label: cancelLabel, value: false }, { label: okLabel, value: true, cls: okCls }]
+    });
+}
+
+/* ==========================================================================
+ *  Application state
+ * ========================================================================== */
+const DEFAULT_SETTINGS = {
+    roi: Object.assign({}, CONFIG.DEFAULT_ROI),
+    showRoi: true,
+    restrictRoi: false,
+    elevProvider: "auto",
+    dms: false,
+    clickToAdd: true,
+    googleKey: "",
+    oeKey: "",
+    baseLayer: ""
+};
+const state = {
+    points: [],            // ordered array → S.No. = index + 1
+    byId: new Map(),       // id → point
+    nextSeq: 1,            // permanent Point ID counter
+    selectedId: null,
+    meta: { project: "", surveyor: "", surveyId: "", district: "", block: "", village: "", site: "" },
+    settings: JSON.parse(JSON.stringify(DEFAULT_SETTINGS)),
+    lastFix: null
+};
+let storageAvailable = true;
+let dataReady = false;   // false until the user has answered the "restore previous survey?" question
+
+function getGoogleKey() { return String(state.settings.googleKey || CONFIG.GOOGLE_MAPS_API_KEY || "").trim(); }
+function getOpenElevationKey() { return String(state.settings.oeKey || CONFIG.OPEN_ELEVATION_API_KEY || "").trim(); }
+function indexOfPoint(p) { return state.points.indexOf(p); }
+function nextPointId() {
+    const used = new Set(state.points.map(p => p.pointId));
+    let id;
+    do { id = CONFIG.POINT_ID_PREFIX + pad(state.nextSeq++, 4); } while (used.has(id));
+    return id;
+}
+function bumpSeqFromId(pointId) {
+    const m = String(pointId || "").match(/(\d+)\s*$/);
+    if (m && String(pointId).startsWith(CONFIG.POINT_ID_PREFIX)) state.nextSeq = Math.max(state.nextSeq, Number(m[1]) + 1);
+}
+
+/** Make a clean, fully-typed point object from any source (new, restored, imported). */
+function normalizePoint(r) {
+    if (!r) return null;
+    const lat = Number(r.lat), lon = Number(r.lon);
+    if (validateLatLon(lat, lon)) return null;
+    const numOrNull = v => (v === null || v === undefined || v === "") ? null : (Number.isFinite(Number(v)) ? Number(v) : null);
+    const str = v => (v === null || v === undefined) ? "" : String(v);
+    const elevation = numOrNull(r.elevation);
+    let elevStatus = ["loading", "ok", "failed", "manual", "imported"].includes(r.elevStatus) ? r.elevStatus : (elevation !== null ? "imported" : "failed");
+    if (elevation === null && elevStatus !== "loading") elevStatus = "failed";
+    if (elevation !== null && (elevStatus === "failed" || elevStatus === "loading")) elevStatus = "imported";
+    return {
+        id: str(r.id) || uid(),
+        pointId: str(r.pointId),
+        lat, lon,
+        locSource: str(r.locSource) || "Map-selected",
+        district: str(r.district), block: str(r.block), village: str(r.village), site: str(r.site),
+        notes: str(r.notes),
+        elevation: elevation === null ? null : round(elevation, 2),
+        elevSource: elevation === null && elevStatus === "failed" ? "Unavailable" : str(r.elevSource),
+        elevStatus,
+        elevError: str(r.elevError),
+        elevAttempts: Number(r.elevAttempts) || 0,
+        elevRetrievedAt: str(r.elevRetrievedAt),
+        gpsAccuracy: numOrNull(r.gpsAccuracy),
+        gpsAccuracyText: str(r.gpsAccuracyText),
+        gpsAltitude: numOrNull(r.gpsAltitude),
+        gpsAltitudeAccuracy: numOrNull(r.gpsAltitudeAccuracy),
+        date: str(r.date), time: str(r.time), tz: str(r.tz), timestampUtc: str(r.timestampUtc),
+        project: str(r.project), surveyor: str(r.surveyor), surveyId: str(r.surveyId)
+    };
+}
+function createPoint(d) {
+    const now = d.when instanceof Date && !isNaN(d.when) ? d.when : new Date();
+    const m = state.meta;
+    return normalizePoint({
+        id: uid(),
+        pointId: nextPointId(),
+        lat: d.lat, lon: d.lon,
+        locSource: d.locSource,
+        district: m.district, block: m.block, village: m.village, site: m.site,
+        notes: d.notes || "",
+        elevation: null, elevSource: "", elevStatus: "loading",
+        gpsAccuracy: d.gpsAccuracy, gpsAltitude: d.gpsAltitude, gpsAltitudeAccuracy: d.gpsAltitudeAccuracy,
+        date: localDate(now), time: localTime(now), tz: tzString(now), timestampUtc: now.toISOString(),
+        project: m.project, surveyor: m.surveyor, surveyId: m.surveyId
+    });
+}
+function typeKey(p) {
+    switch (p.locSource) {
+        case "GPS": return "gps";
+        case "Imported": return "imp";
+        case "Typed coordinates": return "typed";
+        case "Manually edited": return "edit";
+        default: return "map";
+    }
+}
+function typeLabel(p) {
+    return { gps: "GPS", imp: "Import", typed: "Typed", edit: "Edited", map: "Map" }[typeKey(p)];
+}
+function gpsAccDisplay(p) {
+    if (isNum(p.gpsAccuracy)) return String(round(p.gpsAccuracy, 1));
+    if (p.locSource === "Map-selected") return "Map selected";
+    return p.gpsAccuracyText || "";
+}
+function statusText(p) {
+    return { loading: "Loading...", ok: "Retrieved", failed: "Failed", manual: "Manual entry", imported: "Imported" }[p.elevStatus] || "";
+}
+
+/* ==========================================================================
+ *  Persistence (localStorage)
+ * ========================================================================== */
+function checkStorage() {
+    try {
+        const k = "__sbt_test__";
+        localStorage.setItem(k, "1");
+        localStorage.removeItem(k);
+        storageAvailable = true;
+    } catch (e) {
+        storageAvailable = false;
+        setPill("pillSave", "err", "Autosave unavailable");
+        toast("Browser storage (localStorage) is not available — data will NOT be saved automatically. Export CSV/Excel regularly.", "error", 0);
+    }
+}
+function serializePoint(p) {
+    const o = {};
+    for (const k of Object.keys(p)) o[k] = p[k];
+    return o;
+}
+function saveData() {
+    if (!storageAvailable || !dataReady) return;   // never overwrite stored data before the restore decision
+    try {
+        const payload = {
+            app: "SBT_Map_Point_Collector", version: 1, savedAt: new Date().toISOString(),
+            nextSeq: state.nextSeq, points: state.points.map(serializePoint)
+        };
+        localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(payload));
+        setPill("pillSave", "ok", "Autosave: saved " + localTime(new Date()));
+    } catch (e) {
+        setPill("pillSave", "err", "Autosave FAILED");
+        reportError(new Error("Could not save to browser storage (" + (e && e.name === "QuotaExceededError" ? "storage full" : e.message) + "). Export your data now."));
+    }
+}
+const scheduleSave = debounce(saveData, 400);
+function saveSettings() {
+    if (!storageAvailable) return;
+    try {
+        localStorage.setItem(CONFIG.SETTINGS_KEY, JSON.stringify({ meta: state.meta, settings: state.settings }));
+    } catch (e) { console.warn("Settings not saved", e); }
+}
+const scheduleSaveSettings = debounce(saveSettings, 400);
+function loadSettings() {
+    if (!storageAvailable) return;
+    try {
+        const raw = localStorage.getItem(CONFIG.SETTINGS_KEY);
+        if (!raw) return;
+        const s = JSON.parse(raw);
+        if (s && s.meta) for (const k of Object.keys(state.meta)) if (typeof s.meta[k] === "string") state.meta[k] = s.meta[k];
+        if (s && s.settings) {
+            const st = s.settings;
+            for (const k of ["showRoi", "restrictRoi", "dms", "clickToAdd"]) if (typeof st[k] === "boolean") state.settings[k] = st[k];
+            for (const k of ["elevProvider", "googleKey", "oeKey", "baseLayer"]) if (typeof st[k] === "string") state.settings[k] = st[k];
+            if (st.roi && ["north", "south", "east", "west"].every(k => isNum(st.roi[k]))) state.settings.roi = Object.assign({}, st.roi);
+        }
+        if (state.settings.elevProvider !== "auto" && !ELEVATION_PROVIDERS[state.settings.elevProvider]) state.settings.elevProvider = "auto";
+    } catch (e) { console.warn("Could not read settings", e); }
+}
+function loadSavedData() {
+    if (!storageAvailable) return null;
+    let raw = null;
+    try { raw = localStorage.getItem(CONFIG.STORAGE_KEY); } catch (e) { return null; }
+    if (!raw) return null;
+    try {
+        const d = JSON.parse(raw);
+        const pts = [];
+        const seen = new Set();
+        for (const r of (Array.isArray(d.points) ? d.points : [])) {
+            const p = normalizePoint(r);
+            if (!p) continue;
+            if (seen.has(p.id)) p.id = uid();
+            seen.add(p.id);
+            pts.push(p);
+        }
+        return { points: pts, nextSeq: Number(d.nextSeq) || 1, savedAt: d.savedAt || "" };
+    } catch (e) {
+        try { localStorage.setItem(CONFIG.STORAGE_KEY + "_corrupt_backup", raw); } catch (e2) { /* ignore */ }
+        toast("Saved survey data could not be read (corrupted). A raw backup copy was kept in browser storage.", "error", 0);
+        return null;
+    }
+}
+
+/* ==========================================================================
+ *  Status pills
+ * ========================================================================== */
+function setPill(id, cls, text) {
+    const el = $(id);
+    if (!el) return;
+    el.classList.remove("ok", "warn", "err", "busy");
+    if (cls) el.classList.add(cls);
+    el.querySelector(".t").textContent = text;
+}
+function updateNetPill() {
+    if (navigator.onLine) setPill("pillNet", "ok", "Network: online");
+    else setPill("pillNet", "err", "Network: OFFLINE");
+}
+
+/* ==========================================================================
+ *  Network helper
+ * ========================================================================== */
+async function fetchJson(url, options = {}) {
+    if (!navigator.onLine) { const e = new Error("no internet connection"); e.transient = true; throw e; }
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), options.timeout || CONFIG.ELEVATION_TIMEOUT_MS);
+    let res;
+    try {
+        res = await fetch(url, { method: "GET", signal: ctrl.signal, headers: options.headers || {}, cache: "no-store" });
+    } catch (err) {
+        const e = new Error(err && err.name === "AbortError" ? "request timed out" : "network error (offline, blocked, or CORS)");
+        e.transient = true;
+        throw e;
+    } finally { clearTimeout(timer); }
+    let body = null;
+    try { body = await res.json(); } catch (e) { body = null; }
+    if (!res.ok) {
+        let msg = "HTTP " + res.status;
+        if (res.status === 429) msg = "rate limit / quota reached (HTTP 429)";
+        if (body && (body.error || body.reason)) msg += " – " + (typeof body.error === "string" ? body.error : (body.reason || ""));
+        const e = new Error(msg);
+        e.status = res.status;
+        e.transient = res.status === 429 || res.status >= 500;
+        throw e;
+    }
+    if (body === null) throw new Error("invalid JSON response");
+    if (body && body.error === true) throw new Error(body.reason || "service error");
+    return body;
+}
+
+/* ==========================================================================
+ *  Google Elevation (only used when the user supplies an API key)
+ * ========================================================================== */
+let googleLoadPromise = null;
+function loadGoogleElevation() {
+    if (window.google && google.maps && google.maps.importLibrary) {
+        return google.maps.importLibrary("elevation").then(lib => lib.ElevationService);
+    }
+    if (googleLoadPromise) return googleLoadPromise;
+    googleLoadPromise = new Promise((resolve, reject) => {
+        const cb = "__sbtGoogleReady" + Date.now();
+        const timer = setTimeout(() => { googleLoadPromise = null; reject(new Error("timed out loading Google Maps JavaScript API")); }, 20000);
+        window[cb] = () => {
+            clearTimeout(timer);
+            google.maps.importLibrary("elevation").then(lib => resolve(lib.ElevationService), reject);
+        };
+        window.gm_authFailure = () => {
+            toast("Google rejected the API key (check that the key is valid, billing is enabled and the Maps JavaScript API + Elevation API are allowed). Falling back to free services.", "error", 12000);
+        };
+        const s = document.createElement("script");
+        s.src = "https://maps.googleapis.com/maps/api/js?key=" + encodeURIComponent(getGoogleKey()) + "&v=weekly&loading=async&callback=" + cb;
+        s.async = true;
+        s.onerror = () => { clearTimeout(timer); googleLoadPromise = null; const e = new Error("could not load Google Maps JavaScript API"); e.transient = true; reject(e); };
+        document.head.appendChild(s);
+    });
+    return googleLoadPromise;
+}
+
+/* ==========================================================================
+ *  Elevation engine: batching, throttling, fallback, retries
+ * ========================================================================== */
+const Elev = {
+    queue: new Set(),
+    timer: null,
+    running: false,
+    lastRequestAt: 0,
+    backoffUntil: {},
+    lastOkSource: "",
+    lastError: "",
+    status: null,
+
+    providerChain() {
+        const sel = state.settings.elevProvider;
+        if (sel && sel !== "auto" && ELEVATION_PROVIDERS[sel]) return [sel];
+        return CONFIG.ELEVATION_PROVIDER_ORDER.filter(id => ELEVATION_PROVIDERS[id]);
+    },
+    enqueue(ids, opts = {}) {
+        let n = 0;
+        for (const id of ids) {
+            const p = state.byId.get(id);
+            if (!p) continue;
+            if (opts.resetAttempts) p.elevAttempts = 0;
+            p.elevation = null;
+            p.elevSource = "";
+            p.elevStatus = "loading";
+            p.elevError = "";
+            this.queue.add(id);
+            updatePointUI(p);
+            n++;
+        }
+        if (n) { this.updatePill(); this.kick(250); }
+        return n;
+    },
+    kick(delay = 0) {
+        if (this.timer || this.running) return;
+        this.timer = setTimeout(() => { this.timer = null; this.run(); }, delay);
+    },
+    async throttle() {
+        const wait = this.lastRequestAt + CONFIG.ELEVATION_MIN_INTERVAL_MS - Date.now();
+        if (wait > 0) await sleep(wait);
+        this.lastRequestAt = Date.now();
+    },
+    async run() {
+        if (this.running) return;
+        this.running = true;
+        try {
+            while (this.queue.size) {
+                const ids = [];
+                for (const id of this.queue) { ids.push(id); if (ids.length >= CONFIG.ELEVATION_BATCH_SIZE) break; }
+                ids.forEach(id => this.queue.delete(id));
+                const reqs = ids.map(id => state.byId.get(id)).filter(Boolean).map(p => ({ id: p.id, lat: p.lat, lon: p.lon }));
+                if (!reqs.length) continue;
+                this.updatePill();
+                const res = await this.resolve(reqs);
+                this.apply(reqs, res);
+            }
+        } catch (err) {
+            reportError(err, "Elevation");
+        } finally {
+            this.running = false;
+            this.updatePill();
+            if (this.queue.size) this.kick(200);
+        }
+    },
+    async resolve(reqs) {
+        const results = new Map();
+        const errors = [];
+        let remaining = reqs.slice();
+        let transient = false;
+        const chain = this.providerChain();
+        for (const pid of chain) {
+            if (!remaining.length) break;
+            const prov = ELEVATION_PROVIDERS[pid];
+            if (!prov.isConfigured()) {
+                if (chain.length === 1 || pid !== "google") errors.push(prov.label + ": " + (prov.notConfiguredMsg || "not configured"));
+                continue;
+            }
+            if ((this.backoffUntil[pid] || 0) > Date.now()) {
+                errors.push(prov.label + ": rate-limited, paused");
+                transient = true;
+                continue;
+            }
+            try {
+                await this.throttle();
+                const vals = await prov.fetchElevations(remaining.map(r => ({ lat: r.lat, lon: r.lon })));
+                const still = [];
+                remaining.forEach((r, i) => {
+                    const v = vals[i];
+                    if (isValidElevation(v)) results.set(r.id, { elevation: round(v, 2), source: prov.label });
+                    else still.push(r);
+                });
+                if (still.length) errors.push(prov.label + ": no data for " + still.length + " point(s)");
+                if (still.length < remaining.length) this.lastOkSource = prov.label;
+                remaining = still;
+            } catch (err) {
+                errors.push(prov.label + ": " + (err && err.message ? err.message : String(err)));
+                if (err && err.status === 429) this.backoffUntil[pid] = Date.now() + CONFIG.ELEVATION_RATE_LIMIT_BACKOFF_MS;
+                if (err && err.transient) transient = true;
+            }
+        }
+        if (!chain.length) errors.push("No elevation service configured");
+        return { results, remaining, errors, transient };
+    },
+    apply(reqs, { results, errors, transient }) {
+        const retry = [];
+        let failed = 0;
+        for (const r of reqs) {
+            const p = state.byId.get(r.id);
+            if (!p || p.lat !== r.lat || p.lon !== r.lon || p.elevStatus !== "loading") continue; // deleted, moved or edited meanwhile
+            const res = results.get(r.id);
+            if (res) {
+                p.elevation = res.elevation;
+                p.elevSource = res.source;
+                p.elevStatus = "ok";
+                p.elevError = "";
+                p.elevRetrievedAt = new Date().toISOString();
+            } else {
+                failed++;
+                p.elevation = null;
+                p.elevSource = "Unavailable";
+                p.elevStatus = "failed";
+                p.elevError = errors.join(" | ") || "No elevation returned";
+                p.elevAttempts = (p.elevAttempts || 0) + 1;
+                if (transient && p.elevAttempts <= CONFIG.ELEVATION_AUTO_RETRIES) retry.push(p.id);
+            }
+            updatePointUI(p);
+        }
+        if (failed) {
+            this.lastError = errors.join(" | ");
+            this.status = results.size ? { cls: "warn", text: "Elevation: " + failed + " failed" } : { cls: "err", text: "Elevation: FAILED" };
+            $("pillElev").title = this.lastError;
+            if (!this._lastFailToast || Date.now() - this._lastFailToast > 8000) {
+                this._lastFailToast = Date.now();
+                toast("Elevation unavailable for " + failed + " point(s): " + this.lastError +
+                      (retry.length ? " — will retry automatically." : " — use “Refresh Elevations” later."), "warn", 8000);
+            }
+        } else if (results.size) {
+            this.status = { cls: "ok", text: "Elevation: OK (" + this.lastOkSource.replace(/ \(.*\)$/, "") + ")" };
+            $("pillElev").title = "Last successful service: " + this.lastOkSource;
+        }
+        if (retry.length) {
+            const delay = 20000 * Math.max(1, ...retry.map(id => (state.byId.get(id) || {}).elevAttempts || 1));
+            setTimeout(() => {
+                const ids = retry.filter(id => { const p = state.byId.get(id); return p && p.elevStatus === "failed"; });
+                if (ids.length && navigator.onLine) this.enqueue(ids);
+            }, delay);
+        }
+    },
+    pendingCount() { return state.points.reduce((n, p) => n + (p.elevStatus === "loading" ? 1 : 0), 0); },
+    updatePill() {
+        const pending = this.pendingCount();
+        if (pending) setPill("pillElev", "busy", "Elevation: fetching " + pending + "…");
+        else if (this.status) setPill("pillElev", this.status.cls, this.status.text);
+        else setPill("pillElev", "", "Elevation API: idle");
+        scheduleStats();
+    }
+};
+
+/* ==========================================================================
+ *  Map
+ * ========================================================================== */
+let map = null, pointsLayer = null, roiLayer = null, gpsLayer = null, searchLayer = null, layerControl = null;
+const markers = new Map();   // point id → L.marker
+const baseLayers = {};
+
+function makeIcon(p, n, selected) {
+    const digits = String(n).length;
+    const cls = "pin t-" + typeKey(p) + (selected ? " sel" : "") + (p.elevStatus === "failed" ? " noelev" : "") + (digits >= 4 ? " d4" : digits === 3 ? " d3" : "");
+    return L.divIcon({
+        className: "pin-wrap",
+        html: "<div class=\"" + cls + "\"><span>" + n + "</span></div>",
+        iconSize: [30, 38],
+        iconAnchor: [15, 36],
+        popupAnchor: [0, -34]
+    });
+}
+
+function initMap() {
+    if (typeof L === "undefined") {
+        $("map").hidden = true;
+        $("mapFallback").hidden = false;
+        setPill("pillTiles", "err", "Map library not loaded");
+        return;
+    }
+    map = L.map("map", {
+        center: [CONFIG.DEFAULT_LATITUDE, CONFIG.DEFAULT_LONGITUDE],
+        zoom: CONFIG.DEFAULT_ZOOM,
+        worldCopyJump: true,
+        zoomControl: true
+    });
+
+    const osm = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19, attribution: "&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors"
+    });
+    const carto = L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+        subdomains: "abcd", maxZoom: 20,
+        attribution: "&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors &copy; <a href=\"https://carto.com/attributions\">CARTO</a>"
+    });
+    const topo = L.tileLayer("https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png", {
+        subdomains: "abc", maxZoom: 17,
+        attribution: "Map data &copy; OpenStreetMap contributors, SRTM | Style &copy; <a href=\"https://opentopomap.org\">OpenTopoMap</a> (CC-BY-SA)"
+    });
+    const sat = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+        maxZoom: 20, maxNativeZoom: 18,
+        attribution: "Imagery &copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community"
+    });
+    const labels = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}", {
+        maxZoom: 20, maxNativeZoom: 18, attribution: "Labels &copy; Esri"
+    });
+    baseLayers["OpenStreetMap"] = osm;
+    baseLayers["OpenStreetMap – CARTO Voyager"] = carto;
+    baseLayers["OpenTopoMap (terrain)"] = topo;
+    baseLayers["Satellite – Esri World Imagery"] = sat;
+
+    // tile health monitoring
+    Object.entries(baseLayers).concat([["Labels", labels]]).forEach(([name, layer]) => {
+        layer._sbtOk = 0; layer._sbtErr = 0;
+        layer.on("tileload", () => {
+            layer._sbtOk++;
+            if (map.hasLayer(layer) && name !== "Labels") setPill("pillTiles", "ok", "Map tiles: OK");
+        });
+        layer.on("tileerror", () => {
+            layer._sbtErr++;
+            if (!map.hasLayer(layer)) return;
+            if (layer._sbtOk === 0 && layer._sbtErr >= 6 && layer === osm) {
+                map.removeLayer(osm);
+                carto.addTo(map);
+                toast("OpenStreetMap tiles could not be loaded here; switched to the CARTO OpenStreetMap basemap.", "warn", 8000);
+                return;
+            }
+            setPill("pillTiles", navigator.onLine ? "warn" : "err", navigator.onLine ? "Map tiles: some failed" : "Map tiles: offline");
+        });
+    });
+
+    const startLayer = baseLayers[state.settings.baseLayer] || osm;
+    startLayer.addTo(map);
+
+    pointsLayer = L.featureGroup().addTo(map);
+    gpsLayer = L.layerGroup().addTo(map);
+    searchLayer = L.layerGroup().addTo(map);
+
+    layerControl = L.control.layers(baseLayers, {
+        "Place labels (for satellite)": labels,
+        "Collected points": pointsLayer,
+        "GPS position": gpsLayer,
+        "Search result": searchLayer
+    }, { collapsed: true, position: "topright" }).addTo(map);
+    map.on("baselayerchange", e => { state.settings.baseLayer = e.name; scheduleSaveSettings(); });
+
+    L.control.scale({ metric: true, imperial: false, maxWidth: 180, position: "bottomleft" }).addTo(map);
+
+    // Map buttons: fullscreen, Ladakh view, fit points, my location
+    const Btns = L.Control.extend({
+        options: { position: "topleft" },
+        onAdd: function () {
+            const div = L.DomUtil.create("div", "leaflet-bar map-btns");
+            const mk = (html, title, fn, id) => {
+                const a = L.DomUtil.create("a", "", div);
+                a.href = "#"; a.innerHTML = html; a.title = title; a.setAttribute("role", "button"); a.setAttribute("aria-label", title);
+                if (id) a.id = id;
+                L.DomEvent.on(a, "click", e => { L.DomEvent.preventDefault(e); guard(fn)(); });
+            };
+            mk("⛶", "Full screen", toggleFullscreen, "fsBtn");
+            mk("⌂", "Ladakh view", ladakhView);
+            mk("⤢", "Fit all points", fitAllPoints);
+            mk("◎", "My location (GPS)", locateMe);
+            L.DomEvent.disableClickPropagation(div);
+            L.DomEvent.disableScrollPropagation(div);
+            return div;
+        }
+    });
+    new Btns().addTo(map);
+
+    // Cursor coordinates readout
+    const Coords = L.Control.extend({
+        options: { position: "bottomleft" },
+        onAdd: function () {
+            const div = L.DomUtil.create("div", "map-coords");
+            div.id = "cursorCoords";
+            div.textContent = "Lat –, Lon –";
+            L.DomEvent.disableClickPropagation(div);
+            return div;
+        }
+    });
+    new Coords().addTo(map);
+    map.on("mousemove", e => {
+        const el = $("cursorCoords");
+        if (el) el.textContent = "Lat " + e.latlng.lat.toFixed(6) + ", Lon " + normLon(e.latlng.lng).toFixed(6) + "  (WGS84)";
+    });
+
+    // Legend
+    const Legend = L.Control.extend({
+        options: { position: "bottomright" },
+        onAdd: function () {
+            const div = L.DomUtil.create("div", "map-legend");
+            div.innerHTML =
+                "<i style=\"background:var(--pin-map)\"></i>Map-selected<br>" +
+                "<i style=\"background:var(--pin-gps)\"></i>GPS<br>" +
+                "<i style=\"background:var(--pin-imp)\"></i>Imported<br>" +
+                "<i style=\"background:var(--pin-typed)\"></i>Typed coords<br>" +
+                "<i style=\"background:var(--pin-edit)\"></i>Edited coords<br>" +
+                "<i style=\"background:var(--sel)\"></i>Selected<br>" +
+                "<i style=\"background:#ef4444\"></i>No elevation";
+            L.DomEvent.disableClickPropagation(div);
+            return div;
+        }
+    });
+    new Legend().addTo(map);
+
+    // Click → add point (with a short delay so double-click-to-zoom does not add points)
+    let clickTimer = null;
+    map.on("click", e => {
+        if (!state.settings.clickToAdd) return;
+        if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; return; }
+        const latlng = e.latlng;
+        clickTimer = setTimeout(() => {
+            clickTimer = null;
+            guard(() => tryAddPoint({ lat: round(latlng.lat, 6), lon: round(normLon(latlng.lng), 6), locSource: "Map-selected" }), "Add point")();
+        }, 260);
+    });
+    map.on("dblclick", () => { if (clickTimer) { clearTimeout(clickTimer); clickTimer = null; } });
+
+    drawRoi();
+    updateClickMode();
+}
+
+function ladakhView() {
+    if (!map) return;
+    map.setView([CONFIG.DEFAULT_LATITUDE, CONFIG.DEFAULT_LONGITUDE], CONFIG.DEFAULT_ZOOM);
+}
+function fitAllPoints() {
+    if (!map) return;
+    if (!state.points.length) { toast("No points to show yet.", "info"); return; }
+    if (state.points.length === 1) { map.setView([state.points[0].lat, state.points[0].lon], 15); return; }
+    const b = L.latLngBounds(state.points.map(p => [p.lat, p.lon]));
+    map.fitBounds(b, { padding: [40, 40], maxZoom: 16 });
+}
+function updateClickMode() {
+    const on = state.settings.clickToAdd;
+    if (map) map.getContainer().classList.toggle("adding", on);
+    $("mapModeHint").innerHTML = "Mode: click-to-add <b>" + (on ? "ON" : "OFF") + "</b>";
+}
+
+/* ---- Fullscreen (modals and messages are moved into the fullscreen element so they stay visible) ---- */
+function toggleFullscreen() {
+    const wrap = $("mapWrap");
+    if (!document.fullscreenEnabled || !wrap.requestFullscreen) { toast("Full-screen mode is not supported by this browser.", "warn"); return; }
+    if (document.fullscreenElement) document.exitFullscreen();
+    else wrap.requestFullscreen().catch(err => toast("Could not enter full screen: " + err.message, "warn"));
+}
+document.addEventListener("fullscreenchange", () => {
+    const fs = document.fullscreenElement;
+    const target = fs || document.body;
+    target.appendChild($("modalRoot"));
+    target.appendChild($("toastRoot"));
+    const b = $("fsBtn");
+    if (b) { b.innerHTML = fs ? "✕" : "⛶"; b.title = fs ? "Exit full screen" : "Full screen"; }
+    if (map) setTimeout(() => map.invalidateSize(), 120);
+});
+
+/* ---- Markers ---- */
+function addMarker(p, idx) {
+    if (!map) return;
+    const n = idx + 1;
+    const m = L.marker([p.lat, p.lon], {
+        icon: makeIcon(p, n, p.id === state.selectedId),
+        title: "Point " + n,
+        riseOnHover: true,
+        keyboard: true,
+        zIndexOffset: p.id === state.selectedId ? 1000 : 0
+    });
+    m.bindPopup(() => popupHtml(p), { maxWidth: 320, minWidth: 230, autoPan: true, autoPanPadding: [30, 30] });
+    m.on("click", guard(() => selectPoint(p.id, { scrollRow: true })));
+    m.addTo(pointsLayer);
+    markers.set(p.id, m);
+}
+function refreshMarker(p, idx) {
+    const m = markers.get(p.id);
+    if (!m) return;
+    if (idx === undefined) idx = indexOfPoint(p);
+    const n = idx + 1;
+    const sel = p.id === state.selectedId;
+    m.options.title = "Point " + n;
+    m.setIcon(makeIcon(p, n, sel));
+    m.setZIndexOffset(sel ? 1000 : 0);
+}
+function popupHtml(p) {
+    const n = indexOfPoint(p) + 1;
+    const dms = state.settings.dms;
+    let elev;
+    if (p.elevStatus === "loading") elev = "<span class=\"st st-load\"><i class=\"spin\"></i>Loading…</span>";
+    else if (isNum(p.elevation)) elev = "<b>" + fmtElev(p.elevation) + " m</b><br><small class=\"muted\">" + esc(p.elevSource) + " · " + esc(statusText(p)) + "</small>";
+    else elev = "<span class=\"st st-fail\">⚠ Elevation unavailable</span>";
+    let rows =
+        "<tr><th>Latitude</th><td class=\"mono\">" + fmtCoord(p.lat) + "°" + (dms ? "<br><small>" + toDMS(p.lat, true) + "</small>" : "") + "</td></tr>" +
+        "<tr><th>Longitude</th><td class=\"mono\">" + fmtCoord(p.lon) + "°" + (dms ? "<br><small>" + toDMS(p.lon, false) + "</small>" : "") + "</td></tr>" +
+        "<tr><th>Elevation</th><td>" + elev + "</td></tr>";
+    if (p.locSource === "GPS" || isNum(p.gpsAccuracy)) rows += "<tr><th>GPS accuracy</th><td>" + (isNum(p.gpsAccuracy) ? "± " + round(p.gpsAccuracy, 1) + " m" : "not provided") + "</td></tr>";
+    else if (p.locSource === "Map-selected") rows += "<tr><th>GPS accuracy</th><td class=\"muted\">Map selected (no GPS)</td></tr>";
+    if (isNum(p.gpsAltitude)) rows += "<tr><th>GPS altitude</th><td>" + fmtElev(p.gpsAltitude) + " m" + (isNum(p.gpsAltitudeAccuracy) ? " (± " + round(p.gpsAltitudeAccuracy, 1) + " m)" : "") + " <small class=\"muted\">device</small></td></tr>";
+    rows += "<tr><th>Date/Time</th><td>" + (esc(p.date) + " " + esc(p.time)).trim() + (p.tz ? " <small class=\"muted\">" + esc(p.tz) + "</small>" : "") + "</td></tr>";
+    const loc = [p.district, p.block, p.village].filter(Boolean).map(esc).join(" › ");
+    if (loc) rows += "<tr><th>Location</th><td>" + loc + "</td></tr>";
+    if (p.site) rows += "<tr><th>Site</th><td>" + esc(p.site) + "</td></tr>";
+    return "<div class=\"pp\">" +
+        "<div class=\"pp-head\"><b>Point " + pad(n, 3) + "</b><span class=\"badge b-" + typeKey(p) + "\">" + esc(p.locSource) + "</span></div>" +
+        "<div class=\"pp-id\">ID " + esc(p.pointId) + "</div>" +
+        "<table class=\"pp-t\">" + rows + "</table>" +
+        "<div class=\"pp-crs\">WGS 84 (EPSG:4326) · Decimal Degrees</div>" +
+        "<div class=\"pp-act\"><button type=\"button\" class=\"btn btn-xs\" data-pact=\"edit\" data-id=\"" + esc(p.id) + "\">✎ Edit</button>" +
+        "<button type=\"button\" class=\"btn btn-xs btn-danger\" data-pact=\"delete\" data-id=\"" + esc(p.id) + "\">🗑 Delete</button></div></div>";
+}
+
+/* ---- ROI ---- */
+function inRoi(lat, lon) {
+    const r = state.settings.roi;
+    return lat <= r.north && lat >= r.south && lon >= r.west && lon <= r.east;
+}
+function drawRoi() {
+    if (!map) return;
+    if (roiLayer) { map.removeLayer(roiLayer); roiLayer = null; }
+    const r = state.settings.roi;
+    roiLayer = L.rectangle([[r.south, r.west], [r.north, r.east]], {
+        color: "#e11d48", weight: 2, dashArray: "6 5", fill: true, fillOpacity: 0.04, interactive: false
+    });
+    if (state.settings.showRoi) roiLayer.addTo(map);
+}
+function flashRoi() {
+    if (!map || !roiLayer) return;
+    if (!map.hasLayer(roiLayer)) roiLayer.addTo(map);
+    roiLayer.setStyle({ weight: 4, fillOpacity: 0.15 });
+    setTimeout(() => {
+        if (!roiLayer) return;
+        roiLayer.setStyle({ weight: 2, fillOpacity: 0.04 });
+        if (!state.settings.showRoi) map.removeLayer(roiLayer);
+    }, 900);
+}
+function fillRoiInputs() {
+    const r = state.settings.roi;
+    $("roiN").value = r.north; $("roiS").value = r.south; $("roiW").value = r.west; $("roiE").value = r.east;
+}
+function applyRoiFromInputs() {
+    const n = parseCoord($("roiN").value), s = parseCoord($("roiS").value), w = parseCoord($("roiW").value), e = parseCoord($("roiE").value);
+    if (![n, s, w, e].every(isNum)) { toast("ROI values must be numeric decimal degrees.", "error"); return; }
+    if (n > 90 || s < -90 || e > 180 || w < -180) { toast("ROI is outside valid latitude/longitude ranges.", "error"); return; }
+    if (n <= s) { toast("ROI North must be greater than South.", "error"); return; }
+    if (e <= w) { toast("ROI East must be greater than West.", "error"); return; }
+    state.settings.roi = { north: n, south: s, west: w, east: e };
+    scheduleSaveSettings();
+    drawRoi();
+    scheduleStats();
+    toast("ROI updated.", "ok", 2500);
+}
+
+/* ==========================================================================
+ *  Points: add / select / update / delete
+ * ========================================================================== */
+function findNearest(lat, lon, excludeId) {
+    let best = null;
+    const dLatMax = 0.0005; // ~55 m quick reject
+    for (const p of state.points) {
+        if (p.id === excludeId) continue;
+        if (Math.abs(p.lat - lat) > dLatMax) continue;
+        const d = haversine(lat, lon, p.lat, p.lon);
+        if (!best || d < best.dist) best = { p, dist: d };
+    }
+    return best;
+}
+async function confirmNearDuplicate(lat, lon, excludeId) {
+    const near = findNearest(lat, lon, excludeId);
+    if (!near || near.dist > CONFIG.DUPLICATE_DISTANCE_M) return true;
+    const n = indexOfPoint(near.p) + 1;
+    const choice = await openModal({
+        title: "Possible duplicate point",
+        body: "<p><b>Very close to an existing point. Add anyway?</b></p><p class=\"muted\">The location is " + near.dist.toFixed(1) +
+              " m from Point " + n + " (" + esc(near.p.pointId) + ").</p>",
+        escValue: false,
+        buttons: [{ label: "Cancel", value: false }, { label: "Add", value: true, cls: "btn-primary" }]
+    });
+    return choice === true;
+}
+/** Validate + ROI + duplicate check, then create the point. */
+async function tryAddPoint(d) {
+    const err = validateLatLon(d.lat, d.lon);
+    if (err) { toast(err, "error"); return null; }
+    if (state.settings.restrictRoi && !inRoi(d.lat, d.lon)) {
+        toast("Selected point is outside the current ROI.", "warn");
+        flashRoi();
+        return null;
+    }
+    if (!(await confirmNearDuplicate(d.lat, d.lon))) return null;
+    const p = createPoint(d);
+    if (!p) { toast("Invalid point.", "error"); return null; }
+    addPoint(p);
+    selectPoint(p.id, { scrollRow: true, openPopup: true });
+    return p;
+}
+function addPoint(p, opts = {}) {
+    state.points.push(p);
+    state.byId.set(p.id, p);
+    const idx = state.points.length - 1;
+    addMarker(p, idx);
+    appendRow(p, idx);
+    updateEmpty();
+    if (opts.queueElevation !== false) Elev.enqueue([p.id], { resetAttempts: true });
+    scheduleStats();
+    scheduleSave();
+}
+/** Add many points at once (restore / import) with a single table render. */
+function addPointsBulk(list) {
+    for (const p of list) {
+        state.points.push(p);
+        state.byId.set(p.id, p);
+    }
+    if (map) {
+        const start = state.points.length - list.length;
+        list.forEach((p, i) => addMarker(p, start + i));
+    }
+    renderTable();
+    scheduleStats();
+    scheduleSave();
+}
+function selectPoint(id, opts = {}) {
+    const prev = state.selectedId;
+    state.selectedId = id;
+    if (prev && prev !== id) {
+        const tr = rowEls.get(prev);
+        if (tr) tr.classList.remove("selected");
+        const pp = state.byId.get(prev);
+        if (pp) refreshMarker(pp);
+    }
+    const p = state.byId.get(id);
+    if (!p) return;
+    const tr = rowEls.get(id);
+    if (tr) {
+        tr.classList.add("selected");
+        if (opts.scrollRow) scrollRowIntoView(tr);
+    }
+    refreshMarker(p);
+    if (map && opts.zoom) {
+        map.setView([p.lat, p.lon], Math.max(map.getZoom(), 15));
+    }
+    if (map && opts.openPopup) {
+        const m = markers.get(id);
+        if (m) {
+            if (!map.hasLayer(pointsLayer)) pointsLayer.addTo(map);
+            m.openPopup();
+        }
+    }
+}
+/** Update table row, marker and popup after a point changed. */
+function updatePointUI(p, opts = {}) {
+    updateRow(p);
+    const m = markers.get(p.id);
+    if (m) {
+        if (opts.move) m.setLatLng([p.lat, p.lon]);
+        refreshMarker(p);
+        if (m.isPopupOpen()) m.getPopup().update();
+    }
+    scheduleStats();
+    scheduleSave();
+}
+function deletePoint(id) {
+    const idx = state.points.findIndex(p => p.id === id);
+    if (idx < 0) return;
+    state.points.splice(idx, 1);
+    state.byId.delete(id);
+    Elev.queue.delete(id);
+    const m = markers.get(id);
+    if (m && pointsLayer) pointsLayer.removeLayer(m);
+    markers.delete(id);
+    const tr = rowEls.get(id);
+    if (tr) tr.remove();
+    rowEls.delete(id);
+    if (state.selectedId === id) state.selectedId = null;
+    renumberFrom(idx);
+    updateEmpty();
+    applyFilter();
+    scheduleStats();
+    scheduleSave();
+    Elev.updatePill();
+}
+function renumberFrom(idx) {
+    for (let i = idx; i < state.points.length; i++) {
+        const p = state.points[i];
+        const tr = rowEls.get(p.id);
+        if (tr) tr.cells[0].textContent = i + 1;
+        refreshMarker(p, i);
+    }
+}
+async function confirmDelete(id) {
+    const p = state.byId.get(id);
+    if (!p) return;
+    const n = indexOfPoint(p) + 1;
+    const ok = await confirmModal("Delete point " + n + "?",
+        "<p>Delete <b>Point " + n + "</b> (" + esc(p.pointId) + ") at " + fmtCoord(p.lat) + ", " + fmtCoord(p.lon) + "?</p><p class=\"muted\">Remaining points will be renumbered.</p>",
+        "Delete", "btn-danger");
+    if (ok) { deletePoint(id); toast("Point " + n + " deleted. Points renumbered.", "ok", 2500); }
+}
+function undoLast() {
+    if (!state.points.length) { toast("Nothing to undo.", "info"); return; }
+    const p = state.points[state.points.length - 1];
+    const n = state.points.length;
+    deletePoint(p.id);
+    toast("Removed Point " + n + " (" + p.pointId + ").", "ok", 2500);
+}
+async function clearAll() {
+    if (!state.points.length) { toast("There are no points to clear.", "info"); return; }
+    const n = state.points.length;
+    const choice = await openModal({
+        title: "Clear all points?",
+        body: "<p>This will permanently delete <b>all " + n + " points</b> from the map, the table and browser storage.</p><p class=\"muted\">Tip: download a CSV or Excel copy first.</p>",
+        escValue: null,
+        buttons: [{ label: "Cancel", value: null }, { label: "⬇ Download CSV first", value: "csv" }, { label: "Delete all", value: "clear", cls: "btn-danger" }],
+        onButton: (v) => { if (v === "csv") { downloadCSV(state.points); return false; } return true; }
+    });
+    if (choice !== "clear") return;
+    Elev.queue.clear();
+    if (pointsLayer) pointsLayer.clearLayers();
+    markers.clear();
+    state.points = [];
+    state.byId.clear();
+    state.selectedId = null;
+    renderTable();
+    scheduleStats();
+    saveData();
+    Elev.updatePill();
+    toast("All points cleared.", "ok");
+}
+function refreshElevations() {
+    const ids = state.points.filter(p => p.elevation === null && p.elevStatus !== "loading" && p.elevStatus !== "manual").map(p => p.id);
+    if (!ids.length) {
+        const loading = Elev.pendingCount();
+        toast(loading ? loading + " point(s) are already being looked up." : "All points already have an elevation.", "info");
+        return;
+    }
+    if (!navigator.onLine) { toast("You are offline — elevations cannot be retrieved now. Try again when connected.", "error"); return; }
+    for (const pid of Object.keys(Elev.backoffUntil)) Elev.backoffUntil[pid] = 0;
+    Elev.lastError = "";
+    Elev.enqueue(ids, { resetAttempts: true });
+    toast("Re-querying elevation for " + ids.length + " point(s)…", "info", 3000);
+}
+
+/* ==========================================================================
+ *  Table
+ * ========================================================================== */
+const rowEls = new Map();   // point id → <tr>
+function altCellHtml(p) {
+    switch (p.elevStatus) {
+        case "loading": return "<span class=\"st st-load\"><i class=\"spin\"></i>Loading...</span>";
+        case "ok": return "<b>" + fmtElev(p.elevation) + "</b> <span class=\"st st-ok\" title=\"Retrieved from " + esc(p.elevSource) + "\">✓ Retrieved</span>";
+        case "manual": return "<b>" + fmtElev(p.elevation) + "</b> <span class=\"st st-man\" title=\"Entered manually\">✎ Manual</span>";
+        case "imported": return "<b>" + fmtElev(p.elevation) + "</b> <span class=\"st st-imp\" title=\"Value imported from file\">⇪ Imported</span>";
+        default: return "<span class=\"st st-fail\" title=\"" + esc(p.elevError || "Elevation service failed") + "\">⚠ Failed — Elevation unavailable</span>";
+    }
+}
+function coordCell(v, isLat) {
+    return fmtCoord(v) + (state.settings.dms ? "<br><small class=\"muted\">" + toDMS(v, isLat) + "</small>" : "");
+}
+function rowHtml(p, i) {
+    const inp = (f, label) => "<input type=\"text\" class=\"cell-in\" data-f=\"" + f + "\" value=\"" + esc(p[f]) + "\" aria-label=\"" + label + "\">";
+    return "<tr data-id=\"" + esc(p.id) + "\"" + (p.id === state.selectedId ? " class=\"selected\"" : "") + ">" +
+        "<td class=\"c-sno\">" + (i + 1) + "</td>" +
+        "<td class=\"c-type\"><span class=\"badge b-" + typeKey(p) + "\" title=\"" + esc(p.locSource) + " · " + esc(p.pointId) + "\">" + typeLabel(p) + "</span></td>" +
+        "<td>" + inp("district", "District") + "</td>" +
+        "<td>" + inp("block", "Block") + "</td>" +
+        "<td>" + inp("village", "Village") + "</td>" +
+        "<td>" + inp("site", "Site") + "</td>" +
+        "<td class=\"c-lat num\">" + coordCell(p.lat, true) + "</td>" +
+        "<td class=\"c-lon num\">" + coordCell(p.lon, false) + "</td>" +
+        "<td class=\"c-alt num\">" + altCellHtml(p) + "</td>" +
+        "<td class=\"c-src\">" + esc(p.elevSource) + "</td>" +
+        "<td class=\"c-gacc\">" + esc(gpsAccDisplay(p)) + "</td>" +
+        "<td class=\"c-galt num\">" + (isNum(p.gpsAltitude) ? fmtElev(p.gpsAltitude) : "") + "</td>" +
+        "<td class=\"c-date\">" + esc(p.date) + "</td>" +
+        "<td class=\"c-time\">" + esc(p.time) + "</td>" +
+        "<td><div class=\"c-act\">" +
+            "<button type=\"button\" class=\"btn btn-xs\" data-act=\"edit\" title=\"Edit point\">✎ Edit</button>" +
+            "<button type=\"button\" class=\"btn btn-xs\" data-act=\"zoom\" title=\"Zoom to point\">⌖ Zoom</button>" +
+            "<button type=\"button\" class=\"btn btn-xs btn-danger\" data-act=\"delete\" title=\"Delete point\">🗑 Delete</button>" +
+        "</div></td></tr>";
+}
+function renderTable() {
+    const tbody = $("pointsBody");
+    tbody.innerHTML = state.points.map(rowHtml).join("");
+    rowEls.clear();
+    for (const tr of tbody.rows) rowEls.set(tr.dataset.id, tr);
+    applyFilter();
+    updateEmpty();
+}
+function appendRow(p, idx) {
+    const tbody = $("pointsBody");
+    tbody.insertAdjacentHTML("beforeend", rowHtml(p, idx));
+    const tr = tbody.lastElementChild;
+    rowEls.set(p.id, tr);
+    filterRow(p, tr, currentFilter());
+    updateCount();
+}
+function updateRow(p) {
+    const tr = rowEls.get(p.id);
+    if (!tr) return;
+    const q = (sel) => tr.querySelector(sel);
+    q(".c-lat").innerHTML = coordCell(p.lat, true);
+    q(".c-lon").innerHTML = coordCell(p.lon, false);
+    q(".c-alt").innerHTML = altCellHtml(p);
+    q(".c-src").textContent = p.elevSource;
+    q(".c-gacc").textContent = gpsAccDisplay(p);
+    q(".c-galt").textContent = isNum(p.gpsAltitude) ? fmtElev(p.gpsAltitude) : "";
+    q(".c-type").innerHTML = "<span class=\"badge b-" + typeKey(p) + "\" title=\"" + esc(p.locSource) + " · " + esc(p.pointId) + "\">" + typeLabel(p) + "</span>";
+    for (const inp of tr.querySelectorAll(".cell-in")) {
+        if (document.activeElement !== inp) inp.value = p[inp.dataset.f] || "";
+    }
+}
+function updateEmpty() {
+    $("emptyMsg").hidden = state.points.length > 0;
+    updateCount();
+}
+function currentFilter() { return $("tblFilter").value.trim().toLowerCase(); }
+function filterRow(p, tr, q) {
+    if (!q) { tr.hidden = false; return true; }
+    const hay = [p.pointId, p.district, p.block, p.village, p.site, p.locSource, p.notes, p.elevSource, p.date].join(" ").toLowerCase();
+    tr.hidden = !hay.includes(q);
+    return !tr.hidden;
+}
+function applyFilter() {
+    const q = currentFilter();
+    for (const p of state.points) {
+        const tr = rowEls.get(p.id);
+        if (tr) filterRow(p, tr, q);
+    }
+    updateCount();
+}
+function updateCount() {
+    const total = state.points.length;
+    const q = currentFilter();
+    if (!q) { $("tblCount").textContent = total + (total === 1 ? " point" : " points"); return; }
+    let shown = 0;
+    for (const tr of rowEls.values()) if (!tr.hidden) shown++;
+    $("tblCount").textContent = "Showing " + shown + " of " + total;
+}
+function scrollRowIntoView(tr) {
+    if (tr.hidden) return;
+    const wrap = $("tableWrap");
+    const headH = $("pointsTable").tHead.offsetHeight;
+    const top = tr.offsetTop;
+    const bottom = top + tr.offsetHeight;
+    if (top - headH < wrap.scrollTop) wrap.scrollTop = top - headH - 4;
+    else if (bottom > wrap.scrollTop + wrap.clientHeight) wrap.scrollTop = bottom - wrap.clientHeight + 4;
+}
+function scrollMapIntoViewIfHidden() {
+    const r = $("mapWrap").getBoundingClientRect();
+    if (r.bottom < 80 || r.top > window.innerHeight - 80) $("secMap").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+/* ---- Edit dialog ---- */
+async function editPoint(id) {
+    const p = state.byId.get(id);
+    if (!p) return;
+    const n = indexOfPoint(p) + 1;
+    const body =
+        "<form class=\"edit-form\" onsubmit=\"return false\"><div class=\"form-grid\">" +
+        "<label class=\"field\">District<input type=\"text\" name=\"district\" value=\"" + esc(p.district) + "\"></label>" +
+        "<label class=\"field\">Block<input type=\"text\" name=\"block\" value=\"" + esc(p.block) + "\"></label>" +
+        "<label class=\"field\">Village<input type=\"text\" name=\"village\" value=\"" + esc(p.village) + "\"></label>" +
+        "<label class=\"field\">Site<input type=\"text\" name=\"site\" value=\"" + esc(p.site) + "\"></label>" +
+        "<label class=\"field\">Latitude (decimal °, WGS84)<input type=\"text\" name=\"lat\" inputmode=\"decimal\" value=\"" + fmtCoord(p.lat) + "\"></label>" +
+        "<label class=\"field\">Longitude (decimal °, WGS84)<input type=\"text\" name=\"lon\" inputmode=\"decimal\" value=\"" + fmtCoord(p.lon) + "\"></label>" +
+        "<label class=\"field\">Altitude / elevation (m)<input type=\"text\" name=\"alt\" inputmode=\"decimal\" value=\"" + (isNum(p.elevation) ? p.elevation : "") + "\" placeholder=\"blank = unknown\"></label>" +
+        "<label class=\"chk\" style=\"align-self:end; padding-bottom:6px\"><input type=\"checkbox\" name=\"refetch\"> Re-fetch elevation from service</label>" +
+        "<label class=\"field span2\">Notes<textarea name=\"notes\" rows=\"2\">" + esc(p.notes) + "</textarea></label>" +
+        "</div>" +
+        "<p class=\"hint\">Location type: <b>" + esc(p.locSource) + "</b> · Elevation source: <b>" + esc(p.elevSource || "–") + "</b> (" + esc(statusText(p)) + ")" +
+        (isNum(p.gpsAltitude) ? " · GPS altitude: " + fmtElev(p.gpsAltitude) + " m" : "") + "</p>" +
+        "<p class=\"hint\" data-coordnote hidden>⚠ Changing coordinates converts this point to “Manually edited”: GPS accuracy / GPS altitude no longer apply and are moved into Notes, and elevation will be re-fetched for the new position.</p>" +
+        "<p class=\"form-err\" hidden></p></form>";
+    await openModal({
+        title: "Edit Point " + n + " (" + p.pointId + ")",
+        body, wide: true, escValue: null,
+        buttons: [{ label: "Cancel", value: null }, { label: "Save changes", value: "save", cls: "btn-primary" }],
+        onSetup: (box) => {
+            const f = box.querySelector("form");
+            const onCoord = () => {
+                const changed = f.elements.lat.value.trim() !== fmtCoord(p.lat) || f.elements.lon.value.trim() !== fmtCoord(p.lon);
+                box.querySelector("[data-coordnote]").hidden = !changed;
+                if (changed) f.elements.refetch.checked = true;
+            };
+            f.elements.lat.addEventListener("input", onCoord);
+            f.elements.lon.addEventListener("input", onCoord);
+        },
+        onButton: (v, box) => (v === "save") ? applyEdit(p, box) : true
+    });
+}
+async function applyEdit(p, box) {
+    const f = box.querySelector("form");
+    const errEl = box.querySelector(".form-err");
+    const fail = (msg) => { errEl.textContent = msg; errEl.hidden = false; return false; };
+    if (!state.byId.has(p.id)) return true; // deleted meanwhile
+    const lat = parseCoord(f.elements.lat.value), lon = parseCoord(f.elements.lon.value);
+    const vErr = validateLatLon(lat, lon);
+    if (vErr) return fail(vErr);
+    const altStr = f.elements.alt.value.trim();
+    let alt = null;
+    if (altStr !== "") {
+        alt = parseNumber(altStr);
+        if (!isNum(alt)) return fail("Altitude must be a number in metres, or left blank.");
+        if (!isValidElevation(alt)) return fail("Altitude must be between -500 and 9000 m.");
+        alt = round(alt, 2);
+    }
+    const coordsChanged = Math.abs(lat - p.lat) > 1e-9 || Math.abs(lon - p.lon) > 1e-9;
+    if (coordsChanged && state.settings.restrictRoi && !inRoi(lat, lon)) return fail("Selected point is outside the current ROI.");
+    if (coordsChanged && !(await confirmNearDuplicate(lat, lon, p.id))) return false;
+
+    p.district = f.elements.district.value.trim();
+    p.block = f.elements.block.value.trim();
+    p.village = f.elements.village.value.trim();
+    p.site = f.elements.site.value.trim();
+    p.notes = f.elements.notes.value.trim();
+
+    const altChanged = !((alt === null && p.elevation === null) || (alt !== null && isNum(p.elevation) && Math.abs(alt - p.elevation) < 0.005));
+    if (coordsChanged) {
+        const parts = [p.locSource, fmtCoord(p.lat) + ", " + fmtCoord(p.lon)];
+        if (isNum(p.gpsAccuracy)) parts.push("GPS accuracy ±" + round(p.gpsAccuracy, 1) + " m");
+        if (isNum(p.gpsAltitude)) parts.push("GPS altitude " + p.gpsAltitude + " m");
+        p.notes = (p.notes ? p.notes + " | " : "") + "Coordinates edited " + localDate(new Date()) + " (was: " + parts.join("; ") + ")";
+        p.lat = round(lat, 8);
+        p.lon = round(lon, 8);
+        p.locSource = "Manually edited";
+        p.gpsAccuracy = null; p.gpsAccuracyText = ""; p.gpsAltitude = null; p.gpsAltitudeAccuracy = null;
+    }
+    const refetch = f.elements.refetch.checked || (coordsChanged && !altChanged && p.elevStatus !== "manual");
+    if (!refetch && altChanged) {
+        if (alt === null) { p.elevation = null; p.elevSource = "Unavailable"; p.elevStatus = "failed"; p.elevError = "Cleared manually"; }
+        else { p.elevation = alt; p.elevSource = "Manual entry"; p.elevStatus = "manual"; p.elevError = ""; }
+    }
+    updatePointUI(p, { move: coordsChanged });
+    if (refetch) Elev.enqueue([p.id], { resetAttempts: true });
+    if (coordsChanged && p.elevStatus === "manual" && !refetch) toast("Coordinates changed but the manual altitude was kept — please verify it.", "warn", 6000);
+    toast("Point " + (indexOfPoint(p) + 1) + " updated.", "ok", 2500);
+    return true;
+}
+
+/* ==========================================================================
+ *  Statistics
+ * ========================================================================== */
+let statsPending = false;
+function scheduleStats() {
+    if (statsPending) return;
+    statsPending = true;
+    requestAnimationFrame(() => { statsPending = false; try { renderStats(); } catch (e) { reportError(e); } });
+}
+function renderStats() {
+    let withE = 0, min = Infinity, max = -Infinity, sum = 0, pending = 0, outRoi = 0;
+    let N = -Infinity, S = Infinity, E = -Infinity, W = Infinity;
+    const types = { map: 0, gps: 0, imp: 0, other: 0 };
+    for (const p of state.points) {
+        if (isNum(p.elevation)) { withE++; sum += p.elevation; if (p.elevation < min) min = p.elevation; if (p.elevation > max) max = p.elevation; }
+        if (p.elevStatus === "loading") pending++;
+        if (p.lat > N) N = p.lat; if (p.lat < S) S = p.lat;
+        if (p.lon > E) E = p.lon; if (p.lon < W) W = p.lon;
+        if (!inRoi(p.lat, p.lon)) outRoi++;
+        const t = typeKey(p);
+        if (t === "map") types.map++; else if (t === "gps") types.gps++; else if (t === "imp") types.imp++; else types.other++;
+    }
+    const total = state.points.length;
+    const m = (v) => isNum(v) && Math.abs(v) !== Infinity ? fmtElev(round(v, 2)) + " <small>m</small>" : "–";
+    $("stTotal").textContent = total;
+    $("stWithElev").textContent = withE;
+    $("stNoElev").textContent = total - withE;
+    $("stMin").innerHTML = withE ? m(min) : "–";
+    $("stMax").innerHTML = withE ? m(max) : "–";
+    $("stMean").innerHTML = withE ? m(sum / withE) : "–";
+    $("stNorth").textContent = total ? N.toFixed(6) : "–";
+    $("stSouth").textContent = total ? S.toFixed(6) : "–";
+    $("stEast").textContent = total ? E.toFixed(6) : "–";
+    $("stWest").textContent = total ? W.toFixed(6) : "–";
+    $("stPending").textContent = pending;
+    $("stOutRoi").textContent = outRoi;
+    $("stTypes").textContent = "Map-selected: " + types.map + " · GPS: " + types.gps + " · Imported: " + types.imp + " · Typed/edited: " + types.other;
+}
+
+/* ==========================================================================
+ *  Device GPS (browser geolocation)
+ * ========================================================================== */
+function locateMe() {
+    const box = $("gpsReadout");
+    if (!("geolocation" in navigator)) {
+        box.innerHTML = "<span class=\"st st-fail\">⚠ Geolocation is not available in this browser.</span>";
+        toast("Geolocation is not available in this browser.", "error");
+        return;
+    }
+    if (window.isSecureContext === false) {
+        toast("This page is not in a secure context; the browser may block geolocation. Open the file directly (file://) or via https.", "warn", 7000);
+    }
+    const btn = $("btnMyLoc");
+    btn.disabled = true;
+    box.innerHTML = "<span class=\"st st-load\"><i class=\"spin\"></i>Requesting position… (allow location access if asked)</span>";
+    navigator.geolocation.getCurrentPosition(pos => {
+        btn.disabled = false;
+        try { showFix(pos); } catch (e) { reportError(e, "GPS"); }
+    }, err => {
+        btn.disabled = false;
+        const msgs = {
+            1: "Location permission denied. Allow location access for this page in the browser’s site settings, then try again.",
+            2: "Position unavailable — the device could not determine its location (no GPS / Wi-Fi fix).",
+            3: "Timed out waiting for a GPS fix. Move to open sky and try again."
+        };
+        const msg = msgs[err.code] || ("Geolocation error: " + err.message);
+        box.innerHTML = "<span class=\"st st-fail\">⚠ " + esc(msg) + "</span>";
+        toast(msg, "error", 8000);
+    }, { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 });
+}
+function showFix(pos) {
+    const c = pos.coords;
+    const fix = {
+        lat: round(c.latitude, 8), lon: round(c.longitude, 8),
+        accuracy: isNum(c.accuracy) ? c.accuracy : null,
+        altitude: isNum(c.altitude) ? c.altitude : null,
+        altitudeAccuracy: isNum(c.altitudeAccuracy) ? c.altitudeAccuracy : null,
+        when: new Date(pos.timestamp || Date.now())
+    };
+    state.lastFix = fix;
+    $("gpsReadout").innerHTML =
+        "<dl>" +
+        "<dt>Latitude</dt><dd>" + fmtCoord(fix.lat) + "°</dd>" +
+        "<dt>Longitude</dt><dd>" + fmtCoord(fix.lon) + "°</dd>" +
+        "<dt>Accuracy</dt><dd>" + (fix.accuracy !== null ? "± " + round(fix.accuracy, 1) + " m" : "not provided") + "</dd>" +
+        "<dt>GPS altitude</dt><dd>" + (fix.altitude !== null ? fmtElev(round(fix.altitude, 2)) + " m" + (fix.altitudeAccuracy !== null ? " (± " + round(fix.altitudeAccuracy, 1) + " m)" : "") : "not provided by device/browser") + "</dd>" +
+        "<dt>Fix time</dt><dd>" + localDate(fix.when) + " " + localTime(fix.when) + "</dd>" +
+        "</dl><p class=\"hint\">GPS altitude is the device reading and is stored separately from DEM elevation. Desktop browsers usually locate by Wi-Fi/IP — check the accuracy value.</p>";
+    $("btnAddGps").disabled = false;
+    if (map) {
+        gpsLayer.clearLayers();
+        if (fix.accuracy !== null) L.circle([fix.lat, fix.lon], { radius: fix.accuracy, color: "#15803d", weight: 1, fillOpacity: 0.12, interactive: false }).addTo(gpsLayer);
+        L.circleMarker([fix.lat, fix.lon], { radius: 7, color: "#fff", weight: 2, fillColor: "#15803d", fillOpacity: 1 })
+            .bindPopup("<b>Current GPS position</b><br>" + fmtCoord(fix.lat) + ", " + fmtCoord(fix.lon) +
+                       "<br>Accuracy: " + (fix.accuracy !== null ? "± " + round(fix.accuracy, 1) + " m" : "n/a") +
+                       "<div class=\"pp-act\"><button type=\"button\" class=\"btn btn-xs btn-teal\" data-pact=\"addgps\">＋ Add as GPS point</button></div>")
+            .addTo(gpsLayer);
+        if (!map.hasLayer(gpsLayer)) gpsLayer.addTo(map);
+        const z = fix.accuracy !== null && fix.accuracy > 2000 ? 11 : 16;
+        map.setView([fix.lat, fix.lon], Math.max(map.getZoom(), z));
+    }
+    toast("GPS fix received" + (fix.accuracy !== null ? " (± " + round(fix.accuracy, 1) + " m)" : "") + ". Press “Add GPS point” to record it.", "ok", 5000);
+}
+async function addGpsPoint() {
+    const f = state.lastFix;
+    if (!f) { toast("No GPS fix yet — press My Location first.", "warn"); return; }
+    const ageMin = (Date.now() - f.when.getTime()) / 60000;
+    if (ageMin > 2) {
+        const ok = await confirmModal("Old GPS fix", "<p>The last GPS fix is " + Math.round(ageMin) + " minutes old. Add it anyway?</p>", "Add anyway");
+        if (!ok) return;
+    }
+    const p = await tryAddPoint({
+        lat: f.lat, lon: f.lon, locSource: "GPS", when: f.when,
+        gpsAccuracy: f.accuracy !== null ? round(f.accuracy, 1) : null,
+        gpsAltitude: f.altitude !== null ? round(f.altitude, 2) : null,
+        gpsAltitudeAccuracy: f.altitudeAccuracy !== null ? round(f.altitudeAccuracy, 1) : null
+    });
+    if (p) toast("GPS point added (" + p.pointId + "). DEM elevation is being retrieved separately.", "ok", 4000);
+}
+
+/* ==========================================================================
+ *  Location search (Nominatim, fallback Photon) + coordinate search
+ * ========================================================================== */
+let lastSearchAt = 0;
+async function doSearch() {
+    const q = $("searchInput").value.trim();
+    const list = $("searchResults");
+    if (!q) { list.hidden = true; return; }
+    // Coordinates?  "34.15, 77.58"  or "34.15 77.58"  or "34.15N 77.58E"
+    const cm = q.match(/^\s*([-+]?\d+(?:[.,]\d+)?\s*°?\s*[NS]?)\s*[,;\s]\s*([-+]?\d+(?:[.,]\d+)?\s*°?\s*[EW]?)\s*$/i);
+    if (cm) {
+        const lat = parseCoord(cm[1].replace(",", ".")), lon = parseCoord(cm[2].replace(",", "."));
+        const e = validateLatLon(lat, lon);
+        if (e) { toast(e, "error"); return; }
+        list.hidden = true;
+        showSearchResult(lat, lon, "Coordinates " + fmtCoord(lat) + ", " + fmtCoord(lon), null, true);
+        return;
+    }
+    if (!navigator.onLine) { toast("Place search needs an internet connection. You can still type coordinates (lat, lon).", "error"); return; }
+    const wait = lastSearchAt + 1100 - Date.now();
+    if (wait > 0) await sleep(wait);
+    lastSearchAt = Date.now();
+    const btn = $("btnSearch");
+    btn.disabled = true;
+    list.hidden = false;
+    list.innerHTML = "<li class=\"muted\" style=\"padding:8px\"><span class=\"spin\"></span> Searching…</li>";
+    let results = [];
+    try {
+        const u = new URL(CONFIG.GEOCODER_URL);
+        u.searchParams.set("q", q);
+        u.searchParams.set("format", "jsonv2");
+        u.searchParams.set("limit", "8");
+        u.searchParams.set("accept-language", "en");
+        u.searchParams.set("viewbox", "75.0,36.5,80.5,32.0"); // prefer Ladakh region, but not restricted
+        const data = await fetchJson(u.toString(), { timeout: 12000 });
+        results = (Array.isArray(data) ? data : []).map(r => ({
+            name: r.display_name, type: [r.category, r.type].filter(Boolean).join(" · "),
+            lat: Number(r.lat), lon: Number(r.lon),
+            bbox: Array.isArray(r.boundingbox) ? [[Number(r.boundingbox[0]), Number(r.boundingbox[2])], [Number(r.boundingbox[1]), Number(r.boundingbox[3])]] : null
+        }));
+    } catch (err) {
+        console.warn("Nominatim failed, trying Photon", err);
+        try {
+            const u = new URL(CONFIG.GEOCODER_FALLBACK_URL);
+            u.searchParams.set("q", q);
+            u.searchParams.set("limit", "8");
+            u.searchParams.set("lat", String(CONFIG.DEFAULT_LATITUDE));
+            u.searchParams.set("lon", String(CONFIG.DEFAULT_LONGITUDE));
+            const data = await fetchJson(u.toString(), { timeout: 12000 });
+            results = ((data && data.features) || []).map(f => {
+                const pr = f.properties || {};
+                const ext = pr.extent; // [minLon, maxLat, maxLon, minLat]
+                return {
+                    name: [pr.name, pr.city, pr.county, pr.state, pr.country].filter(Boolean).join(", "),
+                    type: [pr.osm_key, pr.osm_value].filter(Boolean).join(" · "),
+                    lat: f.geometry.coordinates[1], lon: f.geometry.coordinates[0],
+                    bbox: Array.isArray(ext) ? [[ext[3], ext[0]], [ext[1], ext[2]]] : null
+                };
+            });
+        } catch (err2) {
+            list.innerHTML = "<li style=\"padding:8px\" class=\"st-fail\">⚠ Search service unavailable (" + esc(err2.message) + "). You can still type coordinates.</li>";
+            btn.disabled = false;
+            return;
+        }
+    }
+    btn.disabled = false;
+    results = results.filter(r => isNum(r.lat) && isNum(r.lon));
+    if (!results.length) {
+        list.innerHTML = "<li style=\"padding:8px\" class=\"muted\">No results for “" + esc(q) + "”.</li>";
+        return;
+    }
+    list.innerHTML = results.map((r, i) =>
+        "<li><button type=\"button\" data-sr=\"" + i + "\"><div>" + esc(r.name) + "</div><div class=\"sr-type\">" + esc(r.type) + " · " + r.lat.toFixed(5) + ", " + r.lon.toFixed(5) + "</div></button></li>").join("");
+    list._results = results;
+}
+function showSearchResult(lat, lon, label, bbox, isCoords) {
+    if (!map) { toast("Map is not available.", "error"); return; }
+    searchLayer.clearLayers();
+    const mk = L.circleMarker([lat, lon], { radius: 8, color: "#e11d48", weight: 3, fillColor: "#fff", fillOpacity: 0.9 }).addTo(searchLayer);
+    mk.bindPopup("<b>" + esc(label) + "</b><br><span class=\"mono\">" + fmtCoord(lat) + ", " + fmtCoord(lon) + "</span>" +
+        "<div class=\"pp-act\"><button type=\"button\" class=\"btn btn-xs btn-primary\" data-pact=\"addhere\" data-lat=\"" + lat + "\" data-lon=\"" + lon + "\" data-typed=\"" + (isCoords ? 1 : 0) + "\">＋ Add point here</button></div>");
+    if (bbox && bbox.every(c => c.every(isNum))) map.fitBounds(bbox, { maxZoom: 15 });
+    else map.setView([lat, lon], isCoords ? 15 : 13);
+    if (!map.hasLayer(searchLayer)) searchLayer.addTo(map);
+    mk.openPopup();
+    scrollMapIntoViewIfHidden();
+}
+
+/* ==========================================================================
+ *  CSV / Excel export
+ * ========================================================================== */
+const EXPORT_COLUMNS = [
+    { h: "S.No.", v: (p, i) => i + 1, w: 6 },
+    { h: "District", v: p => p.district },
+    { h: "Block", v: p => p.block },
+    { h: "Village", v: p => p.village },
+    { h: "Site", v: p => p.site },
+    { h: "Latitude", v: p => p.lat, csv: p => fmtCoord(p.lat), z: "0.000000", w: 12 },
+    { h: "Longitude", v: p => p.lon, csv: p => fmtCoord(p.lon), z: "0.000000", w: 12 },
+    { h: "Altitude (m)", v: p => isNum(p.elevation) ? p.elevation : "", z: "0.00" },
+    { h: "GPS Accuracy (m)", v: p => isNum(p.gpsAccuracy) ? round(p.gpsAccuracy, 1) : gpsAccDisplay(p) },
+    { h: "Date", v: p => p.date },
+    { h: "Time", v: p => p.time },
+    { h: "Elevation Source", v: p => p.elevStatus === "loading" ? "Pending" : (p.elevSource || (isNum(p.elevation) ? "" : "Unavailable")) },
+    { h: "Elevation Status", v: p => statusText(p) },
+    { h: "Location Type", v: p => p.locSource },
+    { h: "GPS Altitude (m)", v: p => isNum(p.gpsAltitude) ? p.gpsAltitude : "", z: "0.00" },
+    { h: "GPS Altitude Accuracy (m)", v: p => isNum(p.gpsAltitudeAccuracy) ? p.gpsAltitudeAccuracy : "" },
+    { h: "Point ID", v: p => p.pointId },
+    { h: "UTC Timestamp", v: p => p.timestampUtc },
+    { h: "Time Zone", v: p => p.tz },
+    { h: "Project Name", v: p => p.project },
+    { h: "Surveyor", v: p => p.surveyor },
+    { h: "Survey ID", v: p => p.surveyId },
+    { h: "Notes", v: p => p.notes },
+    { h: "CRS", v: () => "WGS 84 (EPSG:4326)" }
+];
+function exportFilename(ext) { return "SBT_Map_Points_" + localDate(new Date()) + "." + ext; }
+function csvEscape(v) {
+    const s = v === null || v === undefined ? "" : String(v);
+    return /[",\r\n]/.test(s) || /^\s|\s$/.test(s) ? "\"" + s.replace(/"/g, "\"\"") + "\"" : s;
+}
+function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+function downloadCSV(points) {
+    const pts = points || state.points;
+    if (!pts.length) { toast("There are no points to export.", "warn"); return; }
+    const lines = [EXPORT_COLUMNS.map(c => csvEscape(c.h)).join(",")];
+    pts.forEach((p, i) => lines.push(EXPORT_COLUMNS.map(c => csvEscape(c.csv ? c.csv(p, i) : c.v(p, i))).join(",")));
+    const blob = new Blob(["﻿" + lines.join("\r\n") + "\r\n"], { type: "text/csv;charset=utf-8" });
+    downloadBlob(blob, exportFilename("csv"));
+    toast("CSV exported: " + pts.length + " point(s).", "ok", 3000);
+}
+function downloadTemplate() {
+    const hdr = ["Latitude", "Longitude", "Altitude (m)", "District", "Block", "Village", "Site"];
+    const ex = ["34.152600", "77.577100", "", "Leh", "Leh", "Leh", "Example site"];
+    const blob = new Blob(["﻿" + hdr.join(",") + "\r\n" + ex.map(csvEscape).join(",") + "\r\n"], { type: "text/csv;charset=utf-8" });
+    downloadBlob(blob, "SBT_Import_Template.csv");
+}
+/** Insert a frozen header row into the generated sheet XML (SheetJS community edition does not write panes). */
+function freezeHeaderRow(u8) {
+    try {
+        if (!XLSX.CFB) return u8;
+        const cfb = XLSX.CFB.read(u8, { type: "array" });
+        const entry = XLSX.CFB.find(cfb, "/xl/worksheets/sheet1.xml");
+        if (!entry || !entry.content) return u8;
+        let xml = new TextDecoder("utf-8").decode(entry.content);
+        const view = "<sheetViews><sheetView workbookViewId=\"0\" tabSelected=\"1\"><pane ySplit=\"1\" topLeftCell=\"A2\" activePane=\"bottomLeft\" state=\"frozen\"/><selection pane=\"bottomLeft\" activeCell=\"A2\" sqref=\"A2\"/></sheetView></sheetViews>";
+        if (/<sheetViews[\s>]/.test(xml)) xml = xml.replace(/<sheetViews[\s\S]*?<\/sheetViews>|<sheetViews\/>/, view);
+        else if (xml.includes("<sheetFormatPr")) xml = xml.replace("<sheetFormatPr", view + "<sheetFormatPr");
+        else if (xml.includes("<cols>")) xml = xml.replace("<cols>", view + "<cols>");
+        else xml = xml.replace("<sheetData", view + "<sheetData");
+        entry.content = new TextEncoder().encode(xml);
+        entry.size = entry.content.length;
+        const out = XLSX.CFB.write(cfb, { type: "array", fileType: "zip" });
+        return out instanceof Uint8Array ? out : new Uint8Array(out);
+    } catch (e) {
+        console.warn("Could not freeze header row", e);
+        return u8;
+    }
+}
+function downloadExcel() {
+    if (typeof XLSX === "undefined") { toast("The Excel library (SheetJS) could not be loaded — check your internet connection. CSV export still works.", "error", 8000); return; }
+    const pts = state.points;
+    if (!pts.length) { toast("There are no points to export.", "warn"); return; }
+    const aoa = [EXPORT_COLUMNS.map(c => c.h)];
+    pts.forEach((p, i) => aoa.push(EXPORT_COLUMNS.map(c => { const v = c.v(p, i); return v === null || v === undefined ? "" : v; })));
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    // number formats
+    EXPORT_COLUMNS.forEach((c, ci) => {
+        if (!c.z) return;
+        for (let r = 1; r < aoa.length; r++) {
+            const cell = ws[XLSX.utils.encode_cell({ r, c: ci })];
+            if (cell && cell.t === "n") cell.z = c.z;
+        }
+    });
+    // auto-size columns
+    ws["!cols"] = EXPORT_COLUMNS.map((c, ci) => {
+        let w = c.h.length;
+        for (let r = 1; r < aoa.length; r++) {
+            const v = aoa[r][ci];
+            const len = typeof v === "number" ? (c.z ? v.toFixed(c.z.split(".")[1] ? c.z.split(".")[1].length : 0).length : String(v).length) : String(v).length;
+            if (len > w) w = len;
+        }
+        return { wch: Math.min(60, Math.max(c.w || 6, w + 2)) };
+    });
+    ws["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: aoa.length - 1, c: EXPORT_COLUMNS.length - 1 } }) };
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "SBT Survey Points");
+
+    // Survey information sheet
+    const sources = [...new Set(pts.map(p => p.elevSource).filter(Boolean))].join("; ");
+    const now = new Date();
+    const info = [
+        ["Seabuckthorn Location & Elevation Collector — Ladakh", ""],
+        ["Project Name", state.meta.project],
+        ["Surveyor Name", state.meta.surveyor],
+        ["Survey ID", state.meta.surveyId],
+        ["Default District / Block / Village", [state.meta.district, state.meta.block, state.meta.village].filter(Boolean).join(" / ")],
+        ["Exported", localDate(now) + " " + localTime(now) + " " + tzString(now)],
+        ["Total points", pts.length],
+        ["Points with elevation", pts.filter(p => isNum(p.elevation)).length],
+        ["Coordinate reference system", "WGS 84 / EPSG:4326"],
+        ["Coordinate format", "Decimal Degrees (WGS84)"],
+        ["Elevation sources used", sources],
+        ["Altitude (m)", "Terrain elevation from an elevation service / DEM for the stored coordinates (see Elevation Source). Not GPS altitude."],
+        ["GPS Altitude (m)", "Altitude reported by the device GPS (only for GPS points, if provided). Stored separately from DEM elevation."],
+        ["GPS Accuracy (m)", "Horizontal accuracy reported by the device. “Map selected” = location chosen on the map (no GPS)."],
+        ["Location Type", "Map-selected, GPS, Imported, Typed coordinates or Manually edited."]
+    ];
+    const wsInfo = XLSX.utils.aoa_to_sheet(info);
+    wsInfo["!cols"] = [{ wch: 34 }, { wch: 100 }];
+    XLSX.utils.book_append_sheet(wb, wsInfo, "Survey Info");
+
+    let out = XLSX.write(wb, { bookType: "xlsx", type: "array", compression: true });
+    out = freezeHeaderRow(new Uint8Array(out));
+    downloadBlob(new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), exportFilename("xlsx"));
+    toast("Excel exported: " + pts.length + " point(s).", "ok", 3000);
+}
+
+/* ==========================================================================
+ *  CSV / Excel import
+ * ========================================================================== */
+function detectDelimiter(text) {
+    const line = (text.split(/\r\n|\n|\r/).find(l => l.trim() !== "") || "");
+    const counts = { ",": 0, ";": 0, "\t": 0 };
+    let inQ = false;
+    for (const ch of line) {
+        if (ch === "\"") inQ = !inQ;
+        else if (!inQ && ch in counts) counts[ch]++;
+    }
+    let best = ",";
+    for (const d of [";", "\t"]) if (counts[d] > counts[best]) best = d;
+    return best;
+}
+function parseCSV(text, delim) {
+    const rows = [];
+    let row = [], field = "", inQ = false, i = 0;
+    const n = text.length;
+    while (i < n) {
+        const c = text[i];
+        if (inQ) {
+            if (c === "\"") {
+                if (text[i + 1] === "\"") { field += "\""; i += 2; continue; }
+                inQ = false; i++; continue;
+            }
+            field += c; i++; continue;
+        }
+        if (c === "\"" && field.trim() === "") { field = ""; inQ = true; i++; continue; }
+        if (c === delim) { row.push(field); field = ""; i++; continue; }
+        if (c === "\r" || c === "\n") {
+            if (c === "\r" && text[i + 1] === "\n") i++;
+            row.push(field); rows.push(row); row = []; field = ""; i++; continue;
+        }
+        field += c; i++;
+    }
+    if (inQ) throw new Error("the file has an unterminated quoted field");
+    if (field !== "" || row.length) { row.push(field); rows.push(row); }
+    return rows;
+}
+const IMPORT_ALIASES = {
+    lat: ["lat", "latitude", "latdd", "latitudedd", "latitudedecimal", "decimallatitude", "gpslatitude", "y", "latitudewgs84", "latitudedeg"],
+    lon: ["lon", "long", "lng", "longitude", "londd", "longdd", "longitudedd", "longitudedecimal", "decimallongitude", "gpslongitude", "x", "longitudewgs84", "longitudedeg"],
+    elevation: ["altitude", "altitudem", "elevation", "elevationm", "elev", "elevm", "alt", "altm", "height", "heightm", "demelevation", "demaltitude", "altitudemasl", "elevationmasl", "masl"],
+    district: ["district"], block: ["block", "tehsil", "subdivision"], village: ["village", "villagename"], site: ["site", "sitename", "siteid", "location", "locality"],
+    gpsAccuracy: ["gpsaccuracy", "gpsaccuracym", "accuracy", "accuracym", "horizontalaccuracy"],
+    gpsAltitude: ["gpsaltitude", "gpsaltitudem", "gpsalt", "gpselevation"],
+    gpsAltitudeAccuracy: ["gpsaltitudeaccuracy", "gpsaltitudeaccuracym", "altitudeaccuracy"],
+    date: ["date", "surveydate"], time: ["time", "surveytime"],
+    elevSource: ["elevationsource", "elevsource", "altitudesource"],
+    locSource: ["locationtype", "pointtype", "type"],
+    pointId: ["pointid", "id"],
+    timestampUtc: ["utctimestamp", "timestamp", "datetimeutc"],
+    tz: ["timezone"],
+    project: ["projectname", "project"], surveyor: ["surveyor", "surveyorname"], surveyId: ["surveyid"],
+    notes: ["notes", "remarks", "comment", "comments"]
+};
+function normHeader(h) { return String(h || "").replace(/^﻿/, "").toLowerCase().replace(/[^a-z0-9]/g, ""); }
+function mapHeaders(headers) {
+    const norm = headers.map(normHeader);
+    const map = {};
+    for (const [key, aliases] of Object.entries(IMPORT_ALIASES)) {
+        for (const a of aliases) {
+            const idx = norm.indexOf(a);
+            if (idx >= 0 && !Object.values(map).includes(idx)) { map[key] = idx; break; }
+        }
+    }
+    return map;
+}
+async function importFile(file) {
+    if (!file) return;
+    if (file.size === 0) { toast("The selected file is empty.", "error"); return; }
+    if (file.size > 30 * 1024 * 1024) { toast("File is too large (> 30 MB).", "error"); return; }
+    let rows, delim = ",";
+    const isExcel = /\.(xlsx|xls)$/i.test(file.name);
+    if (isExcel) {
+        if (typeof XLSX === "undefined") { toast("Excel import needs the SheetJS library (internet connection). Save the sheet as CSV instead.", "error", 8000); return; }
+        const wb = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: "array" });
+        const sheetName = wb.SheetNames.includes("SBT Survey Points") ? "SBT Survey Points" : wb.SheetNames[0];
+        rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, raw: true, defval: "" });
+    } else {
+        let text = await file.text();
+        text = text.replace(/^﻿/, "");
+        if (!text.trim()) { toast("The CSV file is empty.", "error"); return; }
+        delim = detectDelimiter(text);
+        try { rows = parseCSV(text, delim); }
+        catch (e) { toast("Invalid CSV: " + e.message + ".", "error", 8000); return; }
+    }
+    rows = rows.filter(r => Array.isArray(r) && r.some(c => String(c).trim() !== ""));
+    if (!rows.length) { toast("The file is empty.", "error"); return; }
+    const headers = rows[0].map(h => String(h));
+    const cols = mapHeaders(headers);
+    if (cols.lat === undefined || cols.lon === undefined) {
+        toast("Invalid CSV: could not find Latitude and Longitude columns. Found: " + headers.slice(0, 12).join(", "), "error", 10000);
+        return;
+    }
+    if (rows.length < 2) { toast("The file has a header row but no data rows.", "error"); return; }
+
+    const get = (r, key) => cols[key] === undefined ? "" : (r[cols[key]] === undefined || r[cols[key]] === null ? "" : r[cols[key]]);
+    const getStr = (r, key) => String(get(r, key)).trim();
+    const fixNum = (v) => (delim === ";" && typeof v === "string") ? v.replace(",", ".") : v;
+    const invalid = [];
+    const candidates = [];
+    const usedIds = new Set(state.points.map(p => p.pointId));
+    for (let i = 1; i < rows.length; i++) {
+        const r = rows[i];
+        const lat = parseCoord(fixNum(get(r, "lat"))), lon = parseCoord(fixNum(get(r, "lon")));
+        if (validateLatLon(lat, lon)) { invalid.push(i + 1); continue; }
+        const elevRaw = parseNumber(fixNum(get(r, "elevation")));
+        const elevation = isValidElevation(elevRaw) ? round(elevRaw, 2) : null;
+        const srcIn = getStr(r, "elevSource");
+        const accRaw = get(r, "gpsAccuracy");
+        const accNum = parseNumber(fixNum(accRaw));
+        let locSource = getStr(r, "locSource");
+        if (!["Map-selected", "GPS", "Imported", "Typed coordinates", "Manually edited"].includes(locSource)) {
+            locSource = /map\s*selected/i.test(String(accRaw)) ? "Map-selected" : "Imported";
+        }
+        let pointId = getStr(r, "pointId");
+        if (!pointId || usedIds.has(pointId)) pointId = "";
+        if (pointId) usedIds.add(pointId);
+        const p = normalizePoint({
+            id: uid(), pointId, lat: round(lat, 8), lon: round(lon, 8), locSource,
+            district: getStr(r, "district"), block: getStr(r, "block"), village: getStr(r, "village"), site: getStr(r, "site"),
+            notes: getStr(r, "notes"),
+            elevation,
+            elevSource: elevation !== null ? (srcIn && srcIn !== "Unavailable" ? srcIn : "Imported (file)") : "",
+            elevStatus: elevation !== null ? (srcIn === "Manual entry" ? "manual" : "imported") : "loading",
+            gpsAccuracy: isNum(accNum) ? accNum : null,
+            gpsAccuracyText: !isNum(accNum) && String(accRaw).trim() && !/map\s*selected/i.test(String(accRaw)) ? String(accRaw).trim() : "",
+            gpsAltitude: (v => isNum(v) ? v : null)(parseNumber(fixNum(get(r, "gpsAltitude")))),
+            gpsAltitudeAccuracy: (v => isNum(v) ? v : null)(parseNumber(fixNum(get(r, "gpsAltitudeAccuracy")))),
+            date: getStr(r, "date"), time: getStr(r, "time"), tz: getStr(r, "tz"), timestampUtc: getStr(r, "timestampUtc"),
+            project: getStr(r, "project"), surveyor: getStr(r, "surveyor"), surveyId: getStr(r, "surveyId")
+        });
+        if (p) candidates.push(p);
+        else invalid.push(i + 1);
+    }
+    if (!candidates.length) {
+        toast("No valid points found in the file. Invalid coordinates on row(s): " + invalid.slice(0, 15).join(", ") + (invalid.length > 15 ? "…" : ""), "error", 10000);
+        return;
+    }
+
+    // ROI restriction
+    let outside = 0;
+    let list = candidates;
+    if (state.settings.restrictRoi) {
+        list = candidates.filter(p => inRoi(p.lat, p.lon));
+        outside = candidates.length - list.length;
+    }
+    // Near-duplicates (against existing points and within the file)
+    const dupIdx = new Set();
+    const accepted = [];
+    list.forEach((p, i) => {
+        const nearExisting = findNearest(p.lat, p.lon);
+        let near = nearExisting && nearExisting.dist <= CONFIG.DUPLICATE_DISTANCE_M;
+        if (!near) {
+            for (const q of accepted) {
+                if (Math.abs(q.lat - p.lat) < 0.0005 && haversine(p.lat, p.lon, q.lat, q.lon) <= CONFIG.DUPLICATE_DISTANCE_M) { near = true; break; }
+            }
+        }
+        if (near) dupIdx.add(i);
+        accepted.push(p);
+    });
+    if (dupIdx.size) {
+        const choice = await openModal({
+            title: "Possible duplicate points",
+            body: "<p><b>" + dupIdx.size + "</b> of " + list.length + " imported point(s) are within " + CONFIG.DUPLICATE_DISTANCE_M +
+                  " m of an existing point (or of another row in the file).</p><p>Very close to an existing point. Add anyway?</p>",
+            escValue: "cancel",
+            buttons: [{ label: "Cancel import", value: "cancel" }, { label: "Skip duplicates", value: "skip" }, { label: "Add all", value: "all", cls: "btn-primary" }]
+        });
+        if (choice === "cancel") return;
+        if (choice === "skip") list = list.filter((p, i) => !dupIdx.has(i));
+    }
+    if (!list.length) { toast("Nothing imported (all rows were skipped).", "warn"); return; }
+
+    for (const p of list) {
+        if (!p.pointId) p.pointId = nextPointId();
+        else bumpSeqFromId(p.pointId);
+    }
+    addPointsBulk(list);
+    const toFetch = list.filter(p => p.elevStatus === "loading").map(p => p.id);
+    if (toFetch.length) { list.forEach(p => { if (p.elevStatus === "loading") Elev.queue.add(p.id); }); Elev.updatePill(); Elev.kick(300); }
+    fitAllPoints();
+    let msg = "Imported " + list.length + " point(s) from " + file.name + ".";
+    if (toFetch.length) msg += " Retrieving elevation for " + toFetch.length + " point(s) without altitude.";
+    if (invalid.length) msg += " Skipped " + invalid.length + " row(s) with invalid coordinates (row " + invalid.slice(0, 10).join(", ") + (invalid.length > 10 ? "…" : "") + ").";
+    if (outside) msg += " Skipped " + outside + " point(s) outside the ROI.";
+    if (dupIdx.size && list.length < accepted.length) msg += " Skipped " + (accepted.length - list.length) + " near-duplicate(s).";
+    toast(msg, invalid.length || outside ? "warn" : "ok", 10000);
+}
+
+/* ==========================================================================
+ *  UI wiring
+ * ========================================================================== */
+function populateProviderSelect() {
+    const sel = $("selElevProvider");
+    const order = CONFIG.ELEVATION_PROVIDER_ORDER.filter(id => ELEVATION_PROVIDERS[id]);
+    const autoLabel = "Automatic (fallback): " + order.filter(id => id !== "google" || getGoogleKey()).map(id => ELEVATION_PROVIDERS[id].label.replace(/ \(.*\)$/, "")).join(" → ");
+    let html = "<option value=\"auto\">" + esc(autoLabel) + "</option>";
+    for (const id of Object.keys(ELEVATION_PROVIDERS)) {
+        const p = ELEVATION_PROVIDERS[id];
+        html += "<option value=\"" + esc(id) + "\">" + esc(p.label) + " only" + (p.isConfigured() ? "" : " (not configured)") + "</option>";
+    }
+    sel.innerHTML = html;
+    sel.value = state.settings.elevProvider;
+    if (sel.value !== state.settings.elevProvider) { sel.value = "auto"; state.settings.elevProvider = "auto"; }
+}
+function applySettingsToUI() {
+    for (const el of document.querySelectorAll("[data-meta]")) el.value = state.meta[el.dataset.meta] || "";
+    $("chkClickAdd").checked = state.settings.clickToAdd;
+    $("chkDms").checked = state.settings.dms;
+    $("chkShowRoi").checked = state.settings.showRoi;
+    $("chkRestrictRoi").checked = state.settings.restrictRoi;
+    $("inpGoogleKey").value = state.settings.googleKey || "";
+    $("inpOeKey").value = state.settings.oeKey || "";
+    fillRoiInputs();
+    populateProviderSelect();
+}
+function bindUI() {
+    // project metadata
+    for (const el of document.querySelectorAll("[data-meta]")) {
+        el.addEventListener("input", () => { state.meta[el.dataset.meta] = el.value.trim(); scheduleSaveSettings(); });
+    }
+    // controls
+    $("chkClickAdd").addEventListener("change", e => { state.settings.clickToAdd = e.target.checked; updateClickMode(); scheduleSaveSettings(); });
+    $("btnLadakh").addEventListener("click", guard(() => { ladakhView(); scrollMapIntoViewIfHidden(); }));
+    $("btnFit").addEventListener("click", guard(() => { fitAllPoints(); scrollMapIntoViewIfHidden(); }));
+    $("btnUndo").addEventListener("click", guard(undoLast));
+    $("btnRefreshElev").addEventListener("click", guard(refreshElevations));
+    $("btnClearAll").addEventListener("click", guard(clearAll));
+    $("btnMyLoc").addEventListener("click", guard(locateMe));
+    $("btnAddGps").addEventListener("click", guard(addGpsPoint));
+    $("selElevProvider").addEventListener("change", e => {
+        state.settings.elevProvider = e.target.value;
+        scheduleSaveSettings();
+        const prov = ELEVATION_PROVIDERS[e.target.value];
+        if (prov && !prov.isConfigured()) toast(prov.label + " is not configured (" + prov.notConfiguredMsg + "). Look-ups will fail until it is.", "warn", 7000);
+    });
+    $("chkDms").addEventListener("change", guard(e => {
+        state.settings.dms = e.target.checked;
+        scheduleSaveSettings();
+        for (const p of state.points) {
+            const tr = rowEls.get(p.id);
+            if (tr) { tr.querySelector(".c-lat").innerHTML = coordCell(p.lat, true); tr.querySelector(".c-lon").innerHTML = coordCell(p.lon, false); }
+            const m = markers.get(p.id);
+            if (m && m.isPopupOpen()) m.getPopup().update();
+        }
+    }));
+    $("btnApplyRoi").addEventListener("click", guard(applyRoiFromInputs));
+    $("btnResetRoi").addEventListener("click", guard(() => {
+        state.settings.roi = Object.assign({}, CONFIG.DEFAULT_ROI);
+        fillRoiInputs(); drawRoi(); scheduleStats(); scheduleSaveSettings();
+        toast("ROI reset to default.", "ok", 2500);
+    }));
+    $("btnZoomRoi").addEventListener("click", guard(() => {
+        if (!map) return;
+        const r = state.settings.roi;
+        map.fitBounds([[r.south, r.west], [r.north, r.east]], { padding: [20, 20] });
+        scrollMapIntoViewIfHidden();
+    }));
+    $("chkShowRoi").addEventListener("change", e => {
+        state.settings.showRoi = e.target.checked;
+        scheduleSaveSettings();
+        if (map && roiLayer) { if (e.target.checked) roiLayer.addTo(map); else map.removeLayer(roiLayer); }
+    });
+    $("chkRestrictRoi").addEventListener("change", e => {
+        state.settings.restrictRoi = e.target.checked;
+        scheduleSaveSettings();
+        if (e.target.checked) {
+            const out = state.points.filter(p => !inRoi(p.lat, p.lon)).length;
+            toast("Points outside the ROI will now be rejected." + (out ? " (" + out + " existing point(s) are outside the ROI; they are kept.)" : ""), "info", 5000);
+        }
+    });
+    $("btnSaveKeys").addEventListener("click", () => {
+        const oldGoogle = getGoogleKey();
+        state.settings.googleKey = $("inpGoogleKey").value.trim();
+        state.settings.oeKey = $("inpOeKey").value.trim();
+        saveSettings();
+        populateProviderSelect();
+        if (oldGoogle && getGoogleKey() !== oldGoogle && googleLoadPromise) toast("Reload the page for a changed Google key to take effect.", "warn", 7000);
+        toast("API keys saved in this browser.", "ok", 3000);
+    });
+    $("btnClearKeys").addEventListener("click", () => {
+        state.settings.googleKey = ""; state.settings.oeKey = "";
+        $("inpGoogleKey").value = ""; $("inpOeKey").value = "";
+        saveSettings(); populateProviderSelect();
+        toast("API keys removed from this browser.", "ok", 3000);
+    });
+
+    // table interaction (event delegation)
+    const tbody = $("pointsBody");
+    tbody.addEventListener("change", guard(e => {
+        const inp = e.target.closest(".cell-in");
+        if (!inp) return;
+        const tr = inp.closest("tr");
+        const p = state.byId.get(tr.dataset.id);
+        if (!p) return;
+        p[inp.dataset.f] = inp.value.trim();
+        inp.value = p[inp.dataset.f];
+        const m = markers.get(p.id);
+        if (m && m.isPopupOpen()) m.getPopup().update();
+        filterRow(p, tr, currentFilter());
+        scheduleSave();
+    }));
+    tbody.addEventListener("keydown", e => {
+        if (e.key === "Enter" && e.target.classList.contains("cell-in")) e.target.blur();
+    });
+    tbody.addEventListener("click", guard(e => {
+        const tr = e.target.closest("tr");
+        if (!tr) return;
+        const id = tr.dataset.id;
+        const btn = e.target.closest("button[data-act]");
+        if (btn) {
+            const act = btn.dataset.act;
+            if (act === "edit") { selectPoint(id); return editPoint(id); }
+            if (act === "delete") return confirmDelete(id);
+            if (act === "zoom") { selectPoint(id, { zoom: true, openPopup: true }); scrollMapIntoViewIfHidden(); return; }
+            return;
+        }
+        if (e.target.closest("input")) { selectPoint(id); return; }
+        selectPoint(id, { zoom: true, openPopup: true });
+    }));
+    $("tblFilter").addEventListener("input", debounce(() => applyFilter(), 150));
+
+    // popup buttons + search results (delegated on document; popups live inside the map)
+    document.addEventListener("click", guard(e => {
+        const pb = e.target.closest("[data-pact]");
+        if (pb) {
+            const act = pb.dataset.pact;
+            if (act === "edit") { if (map) map.closePopup(); return editPoint(pb.dataset.id); }
+            if (act === "delete") { if (map) map.closePopup(); return confirmDelete(pb.dataset.id); }
+            if (act === "addgps") { if (map) map.closePopup(); return addGpsPoint(); }
+            if (act === "addhere") {
+                if (map) map.closePopup();
+                return tryAddPoint({ lat: Number(pb.dataset.lat), lon: Number(pb.dataset.lon), locSource: pb.dataset.typed === "1" ? "Typed coordinates" : "Map-selected" });
+            }
+        }
+        const sr = e.target.closest("[data-sr]");
+        if (sr) {
+            const list = $("searchResults");
+            const r = (list._results || [])[Number(sr.dataset.sr)];
+            list.hidden = true;
+            if (r) showSearchResult(r.lat, r.lon, r.name.split(",")[0], r.bbox, false);
+            return;
+        }
+        if (!e.target.closest(".search-bar")) $("searchResults").hidden = true;
+    }));
+    $("btnSearch").addEventListener("click", guard(doSearch, "Search"));
+    $("searchInput").addEventListener("keydown", e => {
+        if (e.key === "Enter") { e.preventDefault(); guard(doSearch, "Search")(); }
+        if (e.key === "Escape") $("searchResults").hidden = true;
+    });
+
+    // export / import
+    $("btnCsv").addEventListener("click", guard(() => downloadCSV(state.points), "CSV export"));
+    $("btnXlsx").addEventListener("click", guard(downloadExcel, "Excel export"));
+    $("btnTemplate").addEventListener("click", guard(downloadTemplate));
+    $("btnImport").addEventListener("click", () => $("fileImport").click());
+    $("fileImport").addEventListener("change", guard(async e => {
+        const file = e.target.files && e.target.files[0];
+        e.target.value = "";
+        try { await importFile(file); } catch (err) { reportError(err, "Import failed"); }
+    }));
+
+    // connectivity
+    window.addEventListener("online", () => {
+        updateNetPill();
+        const missing = state.points.filter(p => p.elevStatus === "failed").length;
+        if (missing) toast("Back online. " + missing + " point(s) have no elevation — press “Refresh Elevations” to retry.", "info", 7000);
+    });
+    window.addEventListener("offline", () => {
+        updateNetPill();
+        toast("You are offline. Points can still be edited and exported; map tiles, search and elevation need the internet.", "warn", 7000);
+    });
+    window.addEventListener("beforeunload", () => { scheduleSave.flush(); saveSettings(); });
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") { scheduleSave.flush(); } });
+}
+
+/* ==========================================================================
+ *  Start-up: restore previous survey?
+ * ========================================================================== */
+async function startup() {
+    checkStorage();
+    loadSettings();
+    applySettingsToUI();
+    try { initMap(); } catch (e) { reportError(e, "Map initialisation failed"); }
+    bindUI();
+    updateNetPill();
+    renderTable();
+    renderStats();
+    Elev.updatePill();
+    if (storageAvailable) setPill("pillSave", "ok", "Autosave: on");
+    if (typeof XLSX === "undefined") toast("Excel library could not be loaded (offline?). CSV export/import still work.", "warn", 7000);
+
+    const saved = loadSavedData();
+    if (!saved || !saved.points.length) { dataReady = true; return; }
+    const when = saved.savedAt ? new Date(saved.savedAt) : null;
+    const choice = await openModal({
+        title: "Previous survey data found",
+        body: "<p><b>Previous survey data found. Do you want to restore it?</b></p>" +
+              "<p class=\"muted\">" + saved.points.length + " point(s)" + (when && !isNaN(when) ? ", last saved " + localDate(when) + " " + localTime(when) : "") + ".</p>" +
+              "<p class=\"hint\">“Start New Survey” permanently discards the stored points. You can download them as CSV first.</p>",
+        buttons: [
+            { label: "⬇ Download previous (CSV)", value: "download", cls: "btn-ghost" },
+            { label: "Start New Survey", value: "new", cls: "btn-danger" },
+            { label: "Restore", value: "restore", cls: "btn-primary" }
+        ],
+        onButton: async (v) => {
+            if (v === "download") { downloadCSV(saved.points); return false; }
+            if (v === "new") {
+                return await confirmModal("Start a new survey?", "<p>Discard the " + saved.points.length + " stored point(s)? This cannot be undone.</p>", "Discard and start new", "btn-danger");
+            }
+            return true;
+        }
+    });
+    dataReady = true;
+    if (choice === "restore") {
+        state.nextSeq = Math.max(1, saved.nextSeq);
+        const usedIds = new Set();
+        for (const p of saved.points) {
+            if (!p.pointId || usedIds.has(p.pointId)) p.pointId = "";
+            else { usedIds.add(p.pointId); bumpSeqFromId(p.pointId); }
+        }
+        for (const p of saved.points) if (!p.pointId) p.pointId = nextPointId();
+        addPointsBulk(saved.points);
+        const interrupted = saved.points.filter(p => p.elevStatus === "loading");
+        if (interrupted.length) { interrupted.forEach(p => Elev.queue.add(p.id)); Elev.updatePill(); Elev.kick(500); }
+        fitAllPoints();
+        toast("Restored " + saved.points.length + " point(s).", "ok", 4000);
+    } else {
+        state.nextSeq = 1;
+        saveData();
+        toast("New survey started.", "ok", 3000);
+    }
+}
+
+document.addEventListener("DOMContentLoaded", () => { guard(startup, "Start-up")(); });
+</script>
+</body>
+</html>
